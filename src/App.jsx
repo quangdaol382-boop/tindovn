@@ -1,4 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+// 250025002500 Supabase 25002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500250025002500
+const supabase = createClient(
+  "https://kvbtvjzkeukcjgqqdddu.supabase.co",
+  "sb_publishable_t9L83Ag6Tbr3PK3_SNEIGw_uiKra69S"
+);
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const C = {
@@ -1106,6 +1113,23 @@ export default function App() {
   const [showMap, setShowMap] = useState(false);
   const [notifCount] = useState(2);                // unread count demo
 
+  // u2500u2500 Load du1eef liu1ec7u thu1eadt tu1eeb Supabase u2500u2500
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const { data: itemsData } = await supabase.from("items").select("*").order("created_at", { ascending: false });
+        const { data: missingData } = await supabase.from("missing_persons").select("*").order("created_at", { ascending: false });
+        if (itemsData && itemsData.length > 0) {
+          setItems(itemsData.map(i => ({ ...i, hoTen: i.ho_ten, soGiayTo: i.so_giay_to, ngaySinh: i.ngay_sinh })));
+        }
+        if (missingData && missingData.length > 0) {
+          setMissing(missingData.map(m => ({ ...m, hoTen: m.ho_ten, gioiTinh: m.gioi_tinh, danhTich: m.danh_tich, trangPhuc: m.trang_phuc, lanCuoiThay: m.lan_cuoi_thay, thoiGian: m.thoi_gian })));
+        }
+      } catch (e) { console.log("Du00f9ng du1eef liu1ec7u mu1eabu"); }
+    };
+    loadData();
+  }, []);
+
   const urgentCount = missing.filter(m=>m.urgency==="high"&&m.type==="missing").length;
 
   const filteredItems = items.filter(i => {
@@ -1125,8 +1149,18 @@ export default function App() {
     return matchSub && (!q||[m.hoTen,m.danhTich,m.lanCuoiThay,m.trangPhuc].some(f=>f?.toLowerCase().includes(q)));
   });
 
-  const addItem = item => setItems(prev=>[item, ...prev]);
-  const addMissing = m => setMissing(prev=>[m, ...prev]);
+  const addItem = async (item) => {
+    try {
+      await supabase.from("items").insert([{ type:item.type, category:item.category, title:item.title, ho_ten:item.hoTen||"", so_giay_to:item.soGiayTo||"", ngay_sinh:item.ngaySinh||"", location:item.location, contact:item.contact, reward:item.reward||"", note:item.note||"", img:item.img, date:item.date }]);
+    } catch (e) {}
+    setItems(prev=>[item, ...prev]);
+  };
+  const addMissing = async (m) => {
+    try {
+      await supabase.from("missing_persons").insert([{ type:m.type, ho_ten:m.hoTen||"", tuoi:m.tuoi||"", gioi_tinh:m.gioiTinh||"", danh_tich:m.danhTich||"", trang_phuc:m.trangPhuc||"", lan_cuoi_thay:m.lanCuoiThay||"", thoi_gian:m.thoiGian||"", contact:m.contact, reward:m.reward||"", urgency:m.urgency||"medium", avatar:m.avatar||"👤", date:m.date }]);
+    } catch (e) {}
+    setMissing(prev=>[m, ...prev]);
+  };
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Segoe UI',system-ui,sans-serif", color:C.text }}>
