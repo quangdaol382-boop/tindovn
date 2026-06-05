@@ -123,7 +123,8 @@ function SectionTitle({ icon, text, color }) {
 
 // ─── AI helpers ───────────────────────────────────────────────────────────────
 // ─── Google Gemini API (miễn phí 1500 lần/ngày) ─────────────────────────────
-const GEMINI_KEY = "AQ.Ab8RN6J-a889YidCiOOxNn4MKLnb-QokeKRrvS-v2LL1SCoZfw"; // ← Dán API Key vào đây
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
+// ← Dán API Key vào đây
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
 
 async function callGemini(prompt, b64Image = null) {
