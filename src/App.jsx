@@ -122,13 +122,22 @@ function SectionTitle({ icon, text, color }) {
 }
 
 // ─── AI helpers ───────────────────────────────────────────────────────────────
-async function callClaude(system, userContent) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1000, system, messages:[{ role:"user", content:userContent }] })
+// ─── Google Gemini API (miễn phí 1500 lần/ngày) ─────────────────────────────
+const GEMINI_KEY = "AQ.Ab8RN6J-a889YidCiOOxNn4MKLnb-QokeKRrvS-v2LL1SCoZfw"; // ← Dán API Key vào đây
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
+
+async function callGemini(prompt, b64Image = null) {
+  const parts = [];
+  if (b64Image) parts.push({ inline_data: { mime_type: "image/jpeg", data: b64Image } });
+  parts.push({ text: prompt });
+  const res = await fetch(GEMINI_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.1, maxOutputTokens: 1000 } })
   });
   const data = await res.json();
-  const raw = (data.content||[]).map(c=>c.text||"").join("").trim().replace(/```json[\s\S]*?```|```/g,"").trim();
+  if (data.error) throw new Error(data.error.message);
+  const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim().replace(/```json[\s\S]*?```|```/g,"").trim();
   return JSON.parse(raw);
 }
 function useImagePicker(onPicked) {
@@ -157,11 +166,11 @@ function DocScanModal({ onClose, onFill }) {
   const scan = async () => {
     setPhase("scanning"); setErr("");
     try {
-      const r = await callClaude(
-        `Bạn là OCR nhận diện giấy tờ Việt Nam. Trả JSON thuần (không markdown, không giải thích).
-Schema: {"loaiGiayTo":"CMND/CCCD|Bằng lái xe|Hộ chiếu|Thẻ sinh viên|Thẻ BHYT|Khác","hoTen":"","soGiayTo":"","ngaySinh":"","gioiTinh":"","queQuan":"","diaChiThuongTru":"","ngayCap":"","noiCap":"","moTaThem":"","doTinCay":0}
-Nếu ảnh không phải giấy tờ: {"loi":"Ảnh không phải giấy tờ"}`,
-        [{ type:"image", source:{ type:"base64", media_type:"image/jpeg", data:b64.current }}, { type:"text", text:"Nhận diện giấy tờ." }]
+      const r = await callGemini(
+        `Bạn là OCR nhận diện giấy tờ Việt Nam. Trả JSON THUẦN không markdown không giải thích.
+Schema bắt buộc: {"loaiGiayTo":"CMND/CCCD|Bằng lái xe|Hộ chiếu|Thẻ sinh viên|Thẻ BHYT|Khác","hoTen":"","soGiayTo":"","ngaySinh":"","gioiTinh":"","queQuan":"","diaChiThuongTru":"","ngayCap":"","noiCap":"","moTaThem":"","doTinCay":90}
+Nếu không phải giấy tờ trả: {"loi":"Ảnh không phải giấy tờ"}`,
+        b64.current
       );
       if (r.loi) { setErr(r.loi); setPhase("error"); return; }
       setResult(r); setPhase("done");
@@ -229,13 +238,13 @@ function FaceMatchModal({ onClose, missing }) {
     setPhase("scanning"); setErr("");
     const list = missing.map(m=>`- ID ${m.id}: ${m.hoTen}, ${m.tuoi}, ${m.gioiTinh}, trang phục: ${m.trangPhuc||"không rõ"}, đặc điểm: ${m.danhTich}`).join("\n");
     try {
-      const r = await callClaude(
-        `Bạn hỗ trợ tìm người mất tích. Phân tích ngoại hình người trong ảnh và đối chiếu với danh sách sau:\n${list}
-Trả JSON thuần: {"moTa":{"gioiTinh":"","doTuoi":"","dacDiem":"","trangPhuc":""},"khopID":null,"mucDoKhop":0,"lyDoKhop":"","deXuat":""}
-- khopID: ID người khớp nhất hoặc null
+      const r = await callGemini(
+        `Bạn hỗ trợ tìm người mất tích. Phân tích ngoại hình người trong ảnh và đối chiếu với danh sách:\n${list}
+Trả JSON THUẦN không markdown: {"moTa":{"gioiTinh":"","doTuoi":"","dacDiem":"","trangPhuc":""},"khopID":null,"mucDoKhop":0,"lyDoKhop":"","deXuat":""}
+- khopID: ID số nguyên của người khớp nhất hoặc null
 - mucDoKhop: 0-100
-- Nếu không có người: {"loi":"Không phát hiện người trong ảnh"}`,
-        [{ type:"image", source:{ type:"base64", media_type:"image/jpeg", data:b64.current }}, { type:"text", text:"Phân tích và đối chiếu." }]
+- Nếu không thấy người: {"loi":"Không phát hiện người trong ảnh"}`,
+        b64.current
       );
       if (r.loi) { setErr(r.loi); setPhase("error"); return; }
       setResult({ ...r, person: missing.find(m=>m.id===r.khopID)||null });
@@ -411,9 +420,9 @@ function PostMissingModal({ onClose, onAdd }) {
   const { pick, inputEl, handleDrop:_ } = useImagePicker(async (src, b64) => {
     setImgPrev(src); setScanning(true);
     try {
-      const r = await callClaude(
-        `Mô tả người trong ảnh. Trả JSON: {"doTuoi":"","gioiTinh":"Nam|Nữ","dacDiem":"","trangPhuc":""}. Chỉ mô tả những gì thấy rõ.`,
-        [{ type:"image", source:{ type:"base64", media_type:"image/jpeg", data:b64 }}, { type:"text", text:"Mô tả người trong ảnh." }]
+      const r = await callGemini(
+        `Mô tả người trong ảnh. Trả JSON THUẦN không markdown: {"doTuoi":"","gioiTinh":"Nam|Nữ","dacDiem":"","trangPhuc":""}. Chỉ mô tả những gì thấy rõ.`,
+        b64
       );
       setForm(f=>({ ...f, tuoi:r.doTuoi||f.tuoi, gioiTinh:r.gioiTinh||f.gioiTinh, danhTich:[r.dacDiem,r.trangPhuc].filter(Boolean).join(". ")||f.danhTich, trangPhuc:r.trangPhuc||f.trangPhuc }));
     } catch {}
