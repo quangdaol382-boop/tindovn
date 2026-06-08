@@ -124,16 +124,23 @@ function SectionTitle({ icon, text, color }) {
 // ─── AI helpers ───────────────────────────────────────────────────────────────
 // ─── Google Gemini API (miễn phí 1500 lần/ngày) ─────────────────────────────
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
-// ← Dán API Key vào đây
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
+const GEMINI_MODEL = "gemini-1.5-flash";
 
 async function callGemini(prompt, b64Image = null) {
   const parts = [];
   if (b64Image) parts.push({ inline_data: { mime_type: "image/jpeg", data: b64Image } });
   parts.push({ text: prompt });
-  const res = await fetch(GEMINI_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+
+  // Ho tro ca 2 dinh dang key: AIzaSy (dung ?key=) va AQ. (dung Bearer)
+  const isNewFormat = GEMINI_KEY && GEMINI_KEY.startsWith("AQ.");
+  const url = isNewFormat
+    ? `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+    : `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`;
+  const headers = { "Content-Type": "application/json" };
+  if (isNewFormat) headers["Authorization"] = `Bearer ${GEMINI_KEY}`;
+
+  const res = await fetch(url, {
+    method: "POST", headers,
     body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.1, maxOutputTokens: 1000 } })
   });
   const data = await res.json();
