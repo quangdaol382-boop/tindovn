@@ -7,19 +7,45 @@ serve(async (req) => {
   }
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders })
 
+  const HF_TOKEN = Deno.env.get("HF_TOKEN")
   const body = await req.json()
-  const GEMINI_KEY = Deno.env.get("GEMINI_KEY")
+  const parts = body.contents?.[0]?.parts || []
 
-  const isBearer = GEMINI_KEY?.startsWith("AQ.")
-  const url = isBearer
-    ? `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`
-    : `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`
+  let prompt = ""
+  let imageBase64 = ""
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" }
-  if (isBearer) headers["Authorization"] = `Bearer ${GEMINI_KEY}`
+  for (const part of parts) {
+    if (part.text) prompt = part.text
+    if (part.inline_data) imageBase64 = part.inline_data.data
+  }
 
-  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) })
+  const messages = [{
+    role: "user",
+    content: imageBase64
+      ? [
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+          { type: "text", text: prompt }
+        ]
+      : [{ type: "text", text: prompt }]
+  }]
+
+  const res = await fetch(
+    "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-VL-7B-Instruct/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${HF_TOKEN}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ model: "Qwen/Qwen2.5-VL-7B-Instruct", messages, max_tokens: 1000 })
+    }
+  )
+
   const data = await res.json()
+  const text = data.choices?.[0]?.message?.content || ""
 
-  return new Response(JSON.stringify(data), { headers: { ...corsHeaders, "Content-Type": "application/json" } })
+  // Trả về format Gemini để App.jsx không cần sửa
+  return new Response(JSON.stringify({
+    candidates: [{ content: { parts: [{ text }] } }]
+  }), { headers: { ...corsHeaders, "Content-Type": "application/json" } })
 })
