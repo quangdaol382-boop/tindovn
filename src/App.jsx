@@ -126,23 +126,39 @@ function Empty({ icon, text }) {
 // ─── Google Gemini AI (qua Supabase Edge Function proxy) ─────────────────────
 // Dùng proxy để tránh CORS và bảo mật API key
 const GEMINI_PROXY = "https://kvbtvjzkeukcjgqqdddu.supabase.co/functions/v1/gemini-proxy";
+const SUPABASE_ANON_KEY = "sb_publishable_t9L83Ag6Tbr3PK3_SNEIGw_uiKra69S";
 
 async function callGemini(prompt, b64Image = null) {
   const parts = [];
   if (b64Image) parts.push({ inline_data: { mime_type: "image/jpeg", data: b64Image } });
   parts.push({ text: prompt });
 
-  const res = await fetch(GEMINI_PROXY, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 1000 }
-    })
-  });
+  let res;
+  try {
+    res = await fetch(GEMINI_PROXY, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+        "apikey": SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 1000 }
+      })
+    });
+  } catch (e) {
+    throw new Error("Không kết nối được tới server AI: " + e.message);
+  }
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Server AI lỗi (${res.status}): ${txt.slice(0, 200)}`);
+  }
+
   const data = await res.json();
-  if (data.error) throw new Error(data.error.message);
   const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim().replace(/```json[\s\S]*?```|```/g, "").trim();
+  if (!raw) throw new Error("AI không trả về dữ liệu");
   return JSON.parse(raw);
 }
 
