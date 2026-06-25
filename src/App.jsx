@@ -398,8 +398,28 @@ function PostMissingModal({ onClose, onAdd }) {
   const { pick, inputEl } = useImagePicker(async (src, b64) => {
     setImgPrev(src); setScanning(true);
     try {
-      const r = await callGemini(`Mô tả người trong ảnh. Trả JSON THUẦN: {"doTuoi":"","gioiTinh":"Nam|Nữ","dacDiem":"","trangPhuc":""}. Chỉ mô tả những gì thấy rõ.`, b64);
-      setForm(f=>({ ...f, tuoi:r.doTuoi||f.tuoi, gioiTinh:r.gioiTinh||f.gioiTinh, danhTich:[r.dacDiem,r.trangPhuc].filter(Boolean).join(". ")||f.danhTich, trangPhuc:r.trangPhuc||f.trangPhuc }));
+     try {
+    const rawResult = await callGemini(`Mô tả người trong ảnh. Chỉ trả về JSON duy nhất với cấu trúc: {"doTuoi": "...", "gioiTinh": "...", "danhTich": "..."}`);
+    
+    // Thêm bước kiểm tra để đảm bảo r là đối tượng JSON
+    let r;
+    try {
+        r = typeof rawResult === 'string' ? JSON.parse(rawResult) : rawResult;
+    } catch (e) {
+        console.error("Lỗi parse JSON:", e);
+        r = {}; // Gán rỗng nếu không parse được
+    }
+
+    console.log("--- BẮT ĐẦU NHẬN DỮ LIỆU TỪ AI ---");
+    setForm(f => ({ 
+        ...f, 
+        tuoi: r.doTuoi || f.tuoi, 
+        gioiTinh: r.gioiTinh || f.gioiTinh, 
+        danhTich: r.danhTich || f.danhTich 
+    }));
+} catch (e) {
+    console.error("Lỗi gọi Gemini:", e);
+}
     } catch {}
     setScanning(false);
   });
