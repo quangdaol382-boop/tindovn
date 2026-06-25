@@ -134,18 +134,15 @@ async function callGemini(prompt, b64Image = null) {
   parts.push({ text: prompt });
 
   let res;
-  try {
-    res = await fetch(GEMINI_PROXY, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-        "apikey": ${SUPABASE_ANON_KEY}
-      },
-      body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 1000 }
-      })
+  // Thay thế bằng đoạn này:
+const { data, error } = await supabase.functions.invoke("gemini-proxy", {
+  body: { 
+    contents: [{ role: "user", parts: parts }] 
+  },
+});
+
+if (error) throw error;
+res = data;
     });
   } catch (e) {
     throw new Error("Không kết nối được tới server AI: " + e.message);
