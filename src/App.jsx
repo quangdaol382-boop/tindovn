@@ -140,7 +140,7 @@ async function callGemini(prompt, b64Image = null) {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-        "apikey": SUPABASE_ANON_KEY
+        "apikey": ${SUPABASE_ANON_KEY}
       },
       body: JSON.stringify({
         contents: [{ parts }],
