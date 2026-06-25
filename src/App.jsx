@@ -133,31 +133,25 @@ async function callGemini(prompt, b64Image = null) {
   if (b64Image) parts.push({ inline_data: { mime_type: "image/jpeg", data: b64Image } });
   parts.push({ text: prompt });
 
-  let res;
-  // Thay thế bằng đoạn này:
-const { data, error } = await supabase.functions.invoke("gemini-proxy", {
-  body: { 
-    contents: [{ role: "user", parts: parts }] 
-  },
-});
-
-if (error) throw error;
-res = data;
+  try {
+    const { data, error } = await supabase.functions.invoke("gemini-proxy", {
+      body: { contents: [{ role: "user", parts: parts }] },
     });
-  } catch (e) {
-    throw new Error("Không kết nối được tới server AI: " + e.message);
-  }
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`Server AI lỗi (${res.status}): ${txt.slice(0, 200)}`);
+    if (error) throw error;
+    
+    // Nếu data là string thì parse, không thì trả về trực tiếp
+    // Xử lý dữ liệu trả về từ Google AI qua Supabase Edge Function
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const cleanRaw = raw.replace(/```json/g, "").replace(/
+```/g, "").trim();
+    
+    if (!cleanRaw) throw new Error("AI không trả về dữ liệu");
+    return JSON.parse(cleanRaw);
+  } catch (err) {
+    console.error("Lỗi gọi Gemini:", err);
+    throw new Error("Không kết nối được tới server AI: " + err.message);
   }
-
-  const data = await res.json();
-  const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim().replace(/```json[\s\S]*?```|```/g, "").trim();
-  if (!raw) throw new Error("AI không trả về dữ liệu");
-  return JSON.parse(raw);
-}
 
 function useImagePicker(onPicked) {
   const ref = useRef();
