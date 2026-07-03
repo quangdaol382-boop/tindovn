@@ -123,35 +123,44 @@ function Empty({ icon, text }) {
   </div>;
 }
 
-// ─── Google Gemini AI (qua Supabase Edge Function proxy) ─────────────────────
-// Dùng proxy để tránh CORS và bảo mật API key
-const GEMINI_PROXY = "https://kvbtvjzkeukcjgqqdddu.supabase.co/functions/v1/gemini-proxy";
-const SUPABASE_ANON_KEY = "sb_publishable_t9L83Ag6Tbr3PK3_SNEIGw_uiKra69S";
+// ─── Claude AI trực tiếp (không cần Gemini hay proxy) ───────────────────────
+const CLAUDE_API = "https://api.anthropic.com/v1/messages";
 
 async function callGemini(prompt, b64Image = null) {
-  const parts = [];
-  if (b64Image) parts.push({ inline_data: { mime_type: "image/jpeg", data: b64Image } });
-  parts.push({ text: prompt });
-
-  try {
-    const { data, error } = await supabase.functions.invoke("gemini-proxy", {
-      body: { contents: [{ role: "user", parts: parts }] },
-    });
-
-    if (error) throw error;
-    
-    // Nếu data là string thì parse, không thì trả về trực tiếp
-    // Xử lý dữ liệu trả về từ Google AI qua Supabase Edge Function
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const cleanRaw = raw.replace(/```json/g, "").replace(/
-```/g, "").trim();
-    
-    if (!cleanRaw) throw new Error("AI không trả về dữ liệu");
-    return JSON.parse(cleanRaw);
-  } catch (err) {
-    console.error("Lỗi gọi Gemini:", err);
-    throw new Error("Không kết nối được tới server AI: " + err.message);
+  const content = [];
+  if (b64Image) {
+    content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: b64Image } });
   }
+  content.push({ type: "text", text: prompt });
+
+  let res;
+  try {
+    res = await fetch(CLAUDE_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages: [{ role: "user", content }]
+      })
+    });
+  } catch (e) {
+    throw new Error("Không kết nối được server AI: " + e.message);
+  }
+
+  const data = await res.json();
+  if (data.error) throw new Error("AI lỗi: " + (data.error.message || JSON.stringify(data.error)));
+
+  const raw = (data.content?.[0]?.text || "").trim().replace(/```json[\s\S]*?```|```/g, "").trim();
+  if (!raw) throw new Error("AI không trả về nội dung. Thử ảnh khác hoặc thử lại.");
+
+  try { return JSON.parse(raw); }
+  catch {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) return JSON.parse(match[0]);
+    throw new Error("AI không trả về đúng định dạng JSON");
+  }
+}
 
 function useImagePicker(onPicked) {
   const ref = useRef();
@@ -164,9 +173,7 @@ function useImagePicker(onPicked) {
   }, [onPicked]);
   const inputEl = <input ref={ref} type="file" accept="image/*" style={{ display:"none" }} onChange={e=>handle(e.target.files[0])}/>;
   return { pick, inputEl, handleDrop: useCallback(e=>{e.preventDefault();handle(e.dataTransfer.files[0]);}, [handle]) };
-}
-
-// ─── AI Doc Scanner Modal ─────────────────────────────────────────────────────
+}// ─── AI Doc Scanner Modal ─────────────────────────────────────────────────────
 function DocScanModal({ onClose, onFill }) {
   const [phase, setPhase] = useState("idle");
   const [preview, setPreview] = useState(null);

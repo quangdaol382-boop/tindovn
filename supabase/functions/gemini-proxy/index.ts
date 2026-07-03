@@ -1,59 +1,50 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const corsHeaders = {
+const CORS = {
   "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey",
-}
+};
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: CORS });
+  }
 
   try {
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")?.trim()
-    const body = await req.json()
+    const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_KEY) throw new Error("Chua cau hinh GEMINI_API_KEY");
 
-    // Chuyển đổi dữ liệu sang định dạng Google API
-    const contents = body.contents.map((c: any) => ({
-      role: "user",
-      parts: c.parts.map((p: any) => {
-        if (p.text) return { text: p.text }
-        const data = p.inline_data || p.inlineData
-        return {
-          inlineData: {
-            mimeType: "image/jpeg",
-            data: data.data
-          }
-        }
-      })
-    }))
+    const body = await req.json();
 
-    const response = await fetch(
-     `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents })
-      }
-    )
+    // Key AQ. dung Bearer token, key AIzaSy dung ?key=
+    const isBearer = GEMINI_KEY.startsWith("AQ.");
+    const url = isBearer
+      ? "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+      : `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
 
-    const result = await response.json()
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (isBearer) headers["Authorization"] = `Bearer ${GEMINI_KEY}`;
 
-    // Kiểm tra cấu trúc phản hồi một cách an toàn
-    const aiText = result.candidates?.[0]?.content?.parts?.[0]?.text || 
-                   JSON.stringify(result.error?.message) || 
-                   "AI không trả về kết quả cụ thể";
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
 
-    // Trả về đúng định dạng JSON mà Frontend mong đợi
-    return new Response(JSON.stringify({ 
-      candidates: [{ content: { parts: [{ text: aiText }] } }] 
-    }), { 
-      headers: { ...corsHeaders, "Content-Type": "application/json" } 
-    })
+    const data = await res.json();
+    console.log(`status=${res.status} resp=${JSON.stringify(data).slice(0, 200)}`);
 
-  } catch (e: any) {
-    return new Response(JSON.stringify({ 
-      candidates: [{ content: { parts: [{ text: "Lỗi kết nối: " + e.message }] } }] 
-    }), { status: 200, headers: corsHeaders })
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: { ...CORS, "Content-Type": "application/json" },
+    });
+
+  } catch (e) {
+    console.error(`Loi: ${e.message}`);
+    return new Response(
+      JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ loi: e.message }) }] } }] }),
+      { status: 200, headers: { ...CORS, "Content-Type": "application/json" } }
+    );
   }
-})
+});
