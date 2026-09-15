@@ -123,8 +123,9 @@ function Empty({ icon, text }) {
   </div>;
 }
 
-// ─── Claude AI trực tiếp (không cần Gemini hay proxy) ───────────────────────
-const CLAUDE_API = "https://api.anthropic.com/v1/messages";
+// ─── Claude AI qua Vercel Edge Function (tránh CORS) ────────────────────────
+// Vercel tự động làm proxy an toàn, không lộ API key
+const AI_PROXY = "/api/ai";
 
 async function callGemini(prompt, b64Image = null) {
   const content = [];
@@ -135,23 +136,19 @@ async function callGemini(prompt, b64Image = null) {
 
   let res;
   try {
-    res = await fetch(CLAUDE_API, {
+    res = await fetch(AI_PROXY, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        messages: [{ role: "user", content }]
-      })
+      body: JSON.stringify({ content })
     });
   } catch (e) {
     throw new Error("Không kết nối được server AI: " + e.message);
   }
 
   const data = await res.json();
-  if (data.error) throw new Error("AI lỗi: " + (data.error.message || JSON.stringify(data.error)));
+  if (data.error) throw new Error("AI lỗi: " + data.error);
 
-  const raw = (data.content?.[0]?.text || "").trim().replace(/```json[\s\S]*?```|```/g, "").trim();
+  const raw = (data.text || "").trim().replace(/```json[\s\S]*?```|```/g, "").trim();
   if (!raw) throw new Error("AI không trả về nội dung. Thử ảnh khác hoặc thử lại.");
 
   try { return JSON.parse(raw); }
@@ -857,11 +854,8 @@ export default function App() {
   const [postItem, setPostItem] = useState(false);
   const [postMissing, setPostMissing] = useState(false);
   const [faceSearch, setFaceSearch] = useState(false);
-  const [user, setUser] = useState(null);
-  const [showLogin, setShowLogin] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [showMap, setShowMap] = useState(false);
-  const [notifCount] = useState(2);
 
   // Load dữ liệu từ Supabase
   useEffect(() => {
@@ -923,13 +917,9 @@ export default function App() {
           </div>
           <div style={{ display:"flex", gap:8, alignItems:"center" }}>
             <button onClick={()=>setShowMap(true)} style={{ background:"#1A1A1A", border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 12px", color:C.text3, fontSize:16, cursor:"pointer" }}>🗺️</button>
-            {user && <button onClick={()=>setShowNotif(v=>!v)} style={{ position:"relative", background:"#1A1A1A", border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 12px", color:C.text3, cursor:"pointer", fontSize:18 }}>
-              🔔{notifCount>0 && <span style={{ position:"absolute", top:4, right:4, background:C.rose, color:"#fff", fontSize:9, fontWeight:800, width:15, height:15, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", animation:"blink 2s ease infinite" }}>{notifCount}</span>}
-            </button>}
+            <button onClick={()=>setShowNotif(v=>!v)} style={{ position:"relative", background:"#1A1A1A", border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 12px", color:C.text3, cursor:"pointer", fontSize:18 }}>🔔</button>
             {mainTab==="missing" && <button onClick={()=>setFaceSearch(true)} style={{ background:`linear-gradient(135deg,${C.violet},${C.violetDark})`, border:"none", borderRadius:10, padding:"9px 14px", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}>🔎 Đối chiếu ảnh</button>}
-            <button onClick={()=>{ if(!user){setShowLogin(true);return;} mainTab==="items"?setPostItem(true):setPostMissing(true); }} style={{ background:`linear-gradient(135deg,${mainTab==="missing"?C.rose:C.accent},${mainTab==="missing"?C.roseDark:C.accentDark})`, border:"none", borderRadius:10, padding:"9px 16px", color:"#fff", fontWeight:800, fontSize:14, cursor:"pointer" }}>+ Đăng tin</button>
-            {user ? <div onClick={()=>setUser(null)} title="Đăng xuất" style={{ width:36, height:36, borderRadius:"50%", background:`linear-gradient(135deg,${C.violet},${C.violetDark})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, cursor:"pointer" }}>👤</div>
-            : <button onClick={()=>setShowLogin(true)} style={{ background:"#1A1A1A", border:`1px solid ${C.border}`, borderRadius:10, padding:"9px 14px", color:C.text2, fontWeight:700, fontSize:13, cursor:"pointer" }}>Đăng nhập</button>}
+            <button onClick={()=>{ mainTab==="items"?setPostItem(true):setPostMissing(true); }} style={{ background:`linear-gradient(135deg,${mainTab==="missing"?C.rose:C.accent},${mainTab==="missing"?C.roseDark:C.accentDark})`, border:"none", borderRadius:10, padding:"9px 16px", color:"#fff", fontWeight:800, fontSize:14, cursor:"pointer" }}>+ Đăng tin</button>
           </div>
         </div>
       </header>
@@ -1075,8 +1065,8 @@ export default function App() {
       {postItem && <PostItemModal onClose={()=>setPostItem(false)} onAdd={addItem}/>}
       {postMissing && <PostMissingModal onClose={()=>setPostMissing(false)} onAdd={addMissing}/>}
       {faceSearch && <FaceMatchModal onClose={()=>setFaceSearch(false)} missing={missing.filter(m=>m.type==="missing")}/>}
-      {showLogin && <LoginModal onClose={()=>setShowLogin(false)} onLogin={u=>{setUser(u);setShowLogin(false);}}/>}
-      {showNotif && <NotifPanel onClose={()=>setShowNotif(false)} user={user}/>}
+
+      {showNotif && <NotifPanel onClose={()=>setShowNotif(false)} user={null}/>}
       {showMap && <MapModal onClose={()=>setShowMap(false)}/>}
     </div>
   );
