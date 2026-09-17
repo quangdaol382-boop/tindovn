@@ -127,10 +127,16 @@ function Empty({ icon, text }) {
 // Vercel tự động làm proxy an toàn, không lộ API key
 const AI_PROXY = "/api/ai";
 
-async function callGemini(prompt, b64Image = null) {
+async function callGemini(prompt, b64Image = null, mimeType = "image/jpeg") {
   const content = [];
   if (b64Image) {
-    content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: b64Image } });
+    // Tự detect mime type từ base64 header
+    let detectedMime = mimeType;
+    if (b64Image.startsWith("/9j/")) detectedMime = "image/jpeg";
+    else if (b64Image.startsWith("iVBOR")) detectedMime = "image/png";
+    else if (b64Image.startsWith("R0lGO")) detectedMime = "image/gif";
+    else if (b64Image.startsWith("UklGR")) detectedMime = "image/webp";
+    content.push({ type: "image", source: { type: "base64", media_type: detectedMime, data: b64Image } });
   }
   content.push({ type: "text", text: prompt });
 
@@ -143,6 +149,11 @@ async function callGemini(prompt, b64Image = null) {
     });
   } catch (e) {
     throw new Error("Không kết nối được server AI: " + e.message);
+  }
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Server lỗi (${res.status}): ${errText.slice(0, 200)}`);
   }
 
   const data = await res.json();
