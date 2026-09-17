@@ -159,14 +159,21 @@ async function callGemini(prompt, b64Image = null, mimeType = "image/jpeg") {
   const data = await res.json();
   if (data.error) throw new Error("AI lỗi: " + data.error);
 
-  const raw = (data.text || "").trim().replace(/```json[\s\S]*?```|```/g, "").trim();
+  let raw = (data.text || "").trim();
   if (!raw) throw new Error("AI không trả về nội dung. Thử ảnh khác hoặc thử lại.");
+
+  // Xóa markdown code block nếu có
+  raw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 
   try { return JSON.parse(raw); }
   catch {
+    // Tìm JSON object trong text
     const match = raw.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error("AI không trả về đúng định dạng JSON");
+    if (match) {
+      try { return JSON.parse(match[0]); }
+      catch {}
+    }
+    throw new Error("AI không trả về đúng định dạng JSON: " + raw.slice(0, 100));
   }
 }
 
