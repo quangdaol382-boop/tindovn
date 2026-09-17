@@ -175,8 +175,12 @@ function useImagePicker(onPicked) {
   const pick = () => ref.current.click();
   const handle = useCallback(file => {
     if (!file?.type.startsWith("image/")) return;
+    const mimeType = file.type || "image/jpeg";
     const r = new FileReader();
-    r.onload = e => onPicked(e.target.result, e.target.result.split(",")[1]);
+    r.onload = e => {
+      const b64 = e.target.result.split(",")[1];
+      onPicked(e.target.result, b64, mimeType);
+    };
     r.readAsDataURL(file);
   }, [onPicked]);
   const inputEl = <input ref={ref} type="file" accept="image/*" style={{ display:"none" }} onChange={e=>handle(e.target.files[0])}/>;
@@ -188,7 +192,8 @@ function DocScanModal({ onClose, onFill }) {
   const [result, setResult] = useState(null);
   const [err, setErr] = useState("");
   const b64 = useRef(null);
-  const { pick, inputEl, handleDrop } = useImagePicker((src, b) => { setPreview(src); b64.current=b; setPhase("idle"); setErr(""); });
+  const mime = useRef("image/jpeg");
+  const { pick, inputEl, handleDrop } = useImagePicker((src, b, mimeType) => { setPreview(src); b64.current=b; mime.current=mimeType||"image/jpeg"; setPhase("idle"); setErr(""); });
 
   const scan = async () => {
     setPhase("scanning"); setErr("");
@@ -198,7 +203,8 @@ function DocScanModal({ onClose, onFill }) {
 Schema bắt buộc: {"loaiGiayTo":"CMND/CCCD|Bằng lái xe|Hộ chiếu|Thẻ sinh viên|Thẻ BHYT|Khác","hoTen":"","soGiayTo":"","ngaySinh":"","gioiTinh":"","queQuan":"","diaChiThuongTru":"","ngayCap":"","noiCap":"","moTaThem":"","doTinCay":90}
 Nếu ảnh không phải giấy tờ: {"loi":"Ảnh không phải giấy tờ hợp lệ"}
 Không được bịa thông tin, chỉ điền những gì đọc được rõ ràng.`,
-        b64.current
+        b64.current,
+        mime.current
       );
       if (r.loi) { setErr(r.loi); setPhase("error"); return; }
       setResult(r); setPhase("done");
