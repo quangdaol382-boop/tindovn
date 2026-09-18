@@ -55,6 +55,27 @@ const privateTitle = item => {
   return `${item.category} — ${item.type==="found"?"Đã nhặt được":"Đang tìm"}`;
 };
 
+// Che thông tin nhạy cảm — chỉ hiện khi xác minh
+const maskID = (id) => {
+  if (!id) return "";
+  if (id.length <= 3) return id;
+  return id.slice(0, 3) + "*".repeat(id.length - 3);
+};
+const maskDate = (date) => {
+  if (!date) return "";
+  // Chỉ hiện tháng và năm, che ngày
+  const parts = date.split("/");
+  if (parts.length === 3) return `**/${parts[1]}/${parts[2]}`;
+  return "**/**/****";
+};
+const maskAddress = (addr) => {
+  if (!addr) return "";
+  // Chỉ hiện tỉnh/thành phố cuối
+  const parts = addr.split(",");
+  if (parts.length > 1) return `***, ${parts[parts.length-1].trim()}`;
+  return addr.slice(0, 3) + "***";
+};
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const S = {
   overlay: { position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:400, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"20px 16px", overflowY:"auto" },
@@ -504,17 +525,36 @@ function ItemDetail({ item, onClose }) {
           <div style={{ fontSize:12, color:C.text3 }}>Đăng ngày {item.date}</div>
         </div>
       </div>
-      {sensitive && <div style={{ background:"rgba(124,111,255,0.08)", border:`1.5px solid ${C.violet}30`, borderRadius:14, padding:"14px 16px", marginBottom:16 }}>
-        <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+      {sensitive && <div style={{ background:"rgba(241,196,15,0.08)", border:`1.5px solid #F1C40F40`, borderRadius:14, padding:"14px 16px", marginBottom:16 }}>
+        <div style={{ display:"flex", gap:10, alignItems:"flex-start", marginBottom:12 }}>
           <span style={{ fontSize:22, flexShrink:0 }}>🔒</span>
           <div>
-            <div style={{ fontWeight:800, fontSize:14, marginBottom:4, color:C.violet }}>Thông tin được bảo mật</div>
-            <div style={{ fontSize:13, color:C.text3, lineHeight:1.6 }}>Họ tên và số giấy tờ chỉ được cung cấp khi bạn liên hệ trực tiếp qua số điện thoại bên dưới.</div>
+            <div style={{ fontWeight:800, fontSize:14, marginBottom:4, color:"#F1C40F" }}>Thông tin đang được bảo mật</div>
+            <div style={{ fontSize:13, color:C.text3, lineHeight:1.6 }}>Số giấy tờ, ngày sinh và địa chỉ chi tiết chỉ hiển thị sau khi xác minh trùng khớp.</div>
           </div>
         </div>
-        <div style={{ marginTop:12, background:"rgba(255,255,255,0.03)", borderRadius:10, padding:"10px 12px" }}>
-          <div style={{ fontSize:12, color:"#666", fontWeight:700, marginBottom:6 }}>💡 Khi liên hệ hãy:</div>
-          <div style={{ fontSize:12, color:C.text3, lineHeight:1.8 }}>1. Mô tả đặc điểm giấy tờ bạn tìm / nhặt được<br/>2. Cho biết địa điểm bạn mất / nhặt<br/>3. Người có giấy tờ sẽ xác nhận thông tin</div>
+        <div style={{ background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"10px 12px", marginBottom:12 }}>
+          <div style={{ fontSize:12, color:C.text2, fontWeight:700, marginBottom:8 }}>📋 Thông tin đã che:</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {item.soGiayTo && <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
+              <span style={{ color:C.text3 }}>Số giấy tờ</span>
+              <span style={{ color:"#F1C40F", fontWeight:700, letterSpacing:2 }}>{maskID(item.soGiayTo)}</span>
+            </div>}
+            {item.ngaySinh && <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
+              <span style={{ color:C.text3 }}>Ngày sinh</span>
+              <span style={{ color:"#F1C40F", fontWeight:700 }}>{maskDate(item.ngaySinh)}</span>
+            </div>}
+            {item.diaChiThuongTru && <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
+              <span style={{ color:C.text3 }}>Địa chỉ</span>
+              <span style={{ color:"#F1C40F", fontWeight:700 }}>{maskAddress(item.diaChiThuongTru)}</span>
+            </div>}
+          </div>
+        </div>
+        <div style={{ fontSize:12, color:C.text3, lineHeight:1.7 }}>
+          💡 <strong style={{ color:C.text2 }}>Để xác minh:</strong> Gọi điện cho người đăng và cung cấp:<br/>
+          1. Số 3 chữ số đầu của giấy tờ<br/>
+          2. Tháng và năm sinh<br/>
+          3. Tỉnh/thành phố trên giấy tờ
         </div>
       </div>}
       <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:14 }}>
@@ -527,11 +567,12 @@ function ItemDetail({ item, onClose }) {
         <SectionTitle icon="📝" text="Ghi chú"/>
         <p style={{ fontSize:14, color:C.text2, lineHeight:1.6, margin:0 }}>{item.note}</p>
       </div>}
-      {!sensitive && (item.hoTen||item.soGiayTo) && <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:14 }}>
+      {(item.hoTen||item.soGiayTo) && <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:14 }}>
         <SectionTitle icon="📋" text="Thông tin trên giấy tờ"/>
-        <InfoRow label="Họ và tên" value={item.hoTen}/>
-        <InfoRow label="Số giấy tờ" value={item.soGiayTo}/>
-        <InfoRow label="Ngày sinh" value={item.ngaySinh}/>
+        <InfoRow label="Họ và tên" value={sensitive ? "*** ***" : item.hoTen}/>
+        <InfoRow label="Số giấy tờ" value={sensitive ? maskID(item.soGiayTo) : item.soGiayTo}/>
+        <InfoRow label="Ngày sinh" value={sensitive ? maskDate(item.ngaySinh) : item.ngaySinh}/>
+        {item.diaChiThuongTru && <InfoRow label="Địa chỉ" value={sensitive ? maskAddress(item.diaChiThuongTru) : item.diaChiThuongTru}/>}
       </div>}
       {item.reward && <div style={{ background:`${C.gold}10`, border:`1px solid ${C.gold}25`, borderRadius:10, padding:"12px 16px", marginBottom:14, display:"flex", alignItems:"center", gap:8 }}>
         <span style={{ fontSize:20 }}>🏆</span><span style={{ color:C.gold, fontWeight:700, fontSize:15 }}>Tiền thưởng: {item.reward}</span>
@@ -599,7 +640,13 @@ function ItemCard({ item, onClick }) {
       <div style={{ fontSize:32, marginBottom:12, width:52, height:52, background:`${color}12`, borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center" }}>{item.img}</div>
       <div style={{ fontSize:10, color:C.text3, textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>{item.category}</div>
       <div style={{ fontWeight:700, fontSize:14, marginBottom:6, lineHeight:1.4, paddingRight:70 }}>{sensitive ? privateTitle(item) : item.title}</div>
-      {!sensitive && item.hoTen && <div style={{ fontSize:11, color:C.violet, fontWeight:600, marginBottom:6 }}>👤 {item.hoTen} {item.soGiayTo && <span style={{ color:"#444" }}>· {item.soGiayTo}</span>}</div>}
+      {item.hoTen && <div style={{ fontSize:11, color:C.violet, fontWeight:600, marginBottom:6 }}>
+        👤 {sensitive ? "*** ***" : item.hoTen}
+        {item.soGiayTo && <span style={{ color:"#444" }}> · {sensitive ? maskID(item.soGiayTo) : item.soGiayTo}</span>}
+      </div>}
+      {sensitive && item.type==="found" && <div style={{ fontSize:10, color:"#F1C40F", marginBottom:4, display:"flex", alignItems:"center", gap:4 }}>
+        🔒 <span>Thông tin được bảo mật — Liên hệ để xác minh</span>
+      </div>}
       <div style={{ fontSize:11, color:"#444" }}>📍 {item.location}</div>
       <div style={{ fontSize:11, color:"#333", marginTop:2 }}>📅 {item.date}</div>
       {sensitive && <div style={{ marginTop:8, display:"flex", alignItems:"center", gap:5 }}><span style={{ fontSize:11 }}>🔒</span><span style={{ fontSize:11, color:"#555" }}>Bấm để liên hệ xác minh</span></div>}
