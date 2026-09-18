@@ -9,14 +9,16 @@ const supabase = createClient(
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const C = {
-  accent: "#FF6B35", accentDark: "#FF3D00",
+  accent: "#27AE60", accentDark: "#1E8449",
   teal: "#2EC4B6",   tealDark: "#1AA398",
   violet: "#7C6FFF", violetDark: "#4F46E5",
   rose: "#FF4F7B",   roseDark: "#C9184A",
-  gold: "#FFD166",
-  bg: "#0A0A0A", bg1: "#111111", bg2: "#161616", bg3: "#1C1C1C",
-  border: "#222222", border2: "#2A2A2A",
-  text: "#F0EDE8", text2: "#999999", text3: "#555555",
+  gold: "#F1C40F",
+  bg: "#0A1A0F", bg1: "#0D1F12", bg2: "#112816", bg3: "#163020",
+  border: "#1E4D2B", border2: "#2A6B3A",
+  text: "#FFFFFF", text2: "#D1D5DB", text3: "#9CA3AF",
+  heroTitle: "#FFFFFF", heroAccent: "#F1C40F",
+  statText: "#E0F2FE",
 };
 
 // ─── Initial Data ─────────────────────────────────────────────────────────────
@@ -926,7 +928,9 @@ export default function App() {
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
         * { -webkit-tap-highlight-color:transparent; }
-        ::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-track{background:#111} ::-webkit-scrollbar-thumb{background:#2A2A2A;border-radius:3px}
+        ::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-track{background:#0D1F12} ::-webkit-scrollbar-thumb{background:#1E4D2B;border-radius:3px}
+        input::placeholder { color: #9CA3AF !important; }
+        input { color: #FFFFFF; }
       `}</style>
 
       {/* HEADER */}
@@ -935,8 +939,15 @@ export default function App() {
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             <div style={{ width:38, height:38, borderRadius:11, background:`linear-gradient(135deg,${C.accent},${C.accentDark})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🔍</div>
             <div>
-              <div style={{ fontWeight:900, fontSize:19, letterSpacing:-0.5, lineHeight:1 }}>TìmĐồ<span style={{ color:C.accent }}>.vn</span></div>
+              <div style={{ fontWeight:900, fontSize:19, letterSpacing:-0.5, lineHeight:1 }}>TìmĐồ<span style={{ color:C.heroAccent }}>.vn</span></div>
               <div style={{ fontSize:9, color:C.text3, letterSpacing:1.5, textTransform:"uppercase" }}>Đồ vật · Người thân · AI</div>
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:6, marginLeft:8, padding:"4px 10px", background:"rgba(255,255,255,0.08)", borderRadius:8, border:`1px solid ${C.border}` }}>
+              <span style={{ fontSize:16 }}>🚔</span>
+              <div style={{ fontSize:9, color:C.text3, lineHeight:1.3 }}>
+                <div style={{ fontWeight:700, color:"#E0F2FE", fontSize:10 }}>CÔNG AN</div>
+                <div>NHÂN DÂN</div>
+              </div>
             </div>
           </div>
           <div style={{ display:"flex", gap:8, alignItems:"center" }}>
@@ -961,28 +972,28 @@ export default function App() {
       </div>
 
       {/* HERO */}
-      <div style={{ background:`linear-gradient(180deg,#181818 0%,${C.bg} 100%)`, padding:"40px 22px 28px", textAlign:"center", borderBottom:`1px solid #161616` }}>
+      <div style={{ background:`linear-gradient(180deg,#0D2B1A 0%,${C.bg} 100%)`, padding:"40px 22px 28px", textAlign:"center", borderBottom:`1px solid #1E4D2B` }}>
         <div style={{ maxWidth:580, margin:"0 auto" }}>
           {mainTab==="missing" ? <>
             <div style={{ fontSize:11, color:C.rose, fontWeight:700, letterSpacing:3, textTransform:"uppercase", marginBottom:10 }}>Kết nối · Chia sẻ · Tìm thấy</div>
-            <h1 style={{ fontSize:34, fontWeight:900, margin:"0 0 10px", lineHeight:1.1, letterSpacing:-1 }}>Tìm người thân<br/><span style={{ color:C.rose }}>thất lạc</span></h1>
-            <p style={{ color:C.text3, fontSize:14, margin:"0 0 20px", lineHeight:1.65 }}>Đăng tin hoặc <strong style={{ color:C.violet }}>tải ảnh để AI đối chiếu</strong> với hồ sơ người mất tích</p>
+            <h1 style={{ fontSize:34, fontWeight:900, margin:"0 0 10px", lineHeight:1.1, letterSpacing:-1, color:C.heroTitle }}>Tìm người thân<br/><span style={{ color:C.rose }}>thất lạc</span></h1>
+            <p style={{ color:C.statText, fontSize:14, margin:"0 0 20px", lineHeight:1.65 }}>Đăng tin hoặc <strong style={{ color:C.heroAccent }}>tải ảnh để AI đối chiếu</strong> với hồ sơ người mất tích</p>
           </> : <>
             <div style={{ fontSize:11, color:C.accent, fontWeight:700, letterSpacing:3, textTransform:"uppercase", marginBottom:10 }}>Cộng đồng hỗ trợ lẫn nhau</div>
-            <h1 style={{ fontSize:34, fontWeight:900, margin:"0 0 10px", lineHeight:1.1, letterSpacing:-1 }}>Mất đồ? Nhặt được?<br/><span style={{ color:C.accent }}>Kết nối ngay!</span></h1>
-            <p style={{ color:C.text3, fontSize:14, margin:"0 0 20px", lineHeight:1.65 }}>Tải ảnh giấy tờ — <strong style={{ color:C.violet }}>AI tự nhận diện & điền thông tin</strong></p>
+            <h1 style={{ fontSize:34, fontWeight:900, margin:"0 0 10px", lineHeight:1.1, letterSpacing:-1, color:C.heroTitle }}>Mất đồ? Nhặt được?<br/><span style={{ color:C.heroAccent }}>Kết nối ngay!</span></h1>
+            <p style={{ color:C.statText, fontSize:14, margin:"0 0 20px", lineHeight:1.65 }}>Tải ảnh giấy tờ — <strong style={{ color:C.heroAccent }}>AI tự nhận diện & điền thông tin</strong></p>
           </>}
           <div style={{ position:"relative", maxWidth:440, margin:"0 auto 20px" }}>
             <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", fontSize:16, pointerEvents:"none" }}>🔍</span>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={mainTab==="missing"?"Tìm theo tên, đặc điểm, địa điểm…":"Tìm theo tên, số CCCD, địa điểm…"} style={{ ...S.input, padding:"13px 14px 13px 42px", borderRadius:14, fontSize:15, border:`1.5px solid ${C.border}` }}/>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={mainTab==="missing"?"Tìm theo tên, đặc điểm, địa điểm…":"Tìm theo tên, số CCCD, địa điểm…"} style={{ ...S.input, padding:"13px 14px 13px 42px", borderRadius:14, fontSize:15, border:`1.5px solid ${C.border}`, color:"#FFFFFF", background:"rgba(255,255,255,0.1)", "::placeholder":{color:"#9CA3AF"} }}/>
             {search && <button onClick={()=>setSearch("")} style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"transparent", border:"none", color:C.text3, cursor:"pointer", fontSize:18 }}>×</button>}
           </div>
           <div style={{ display:"flex", justifyContent:"center", gap:32 }}>
             {(mainTab==="missing"
-              ? [[C.rose,urgentCount,"Khẩn cấp"],[C.accent,missing.filter(m=>m.type==="missing").length,"Đang tìm"],[C.teal,missing.filter(m=>m.type==="found_person").length,"Đã gặp"]]
-              : [[C.accent,items.filter(i=>i.type==="lost").length,"Đang tìm"],[C.teal,items.filter(i=>i.type==="found").length,"Chờ nhận"],["#888","312","Đã trả lại"]]
+              ? [[C.rose,urgentCount,"Khẩn cấp"],[C.heroAccent,missing.filter(m=>m.type==="missing").length,"Đang tìm"],[C.teal,missing.filter(m=>m.type==="found_person").length,"Đã gặp"]]
+              : [[C.heroAccent,items.filter(i=>i.type==="lost").length,"Đang tìm"],[C.teal,items.filter(i=>i.type==="found").length,"Chờ nhận"],[C.statText,"312","Đã trả lại"]]
             ).map(([color,n,l])=>(
-              <div key={l}><div style={{ fontSize:26, fontWeight:900, color, lineHeight:1 }}>{n}</div><div style={{ fontSize:10, color:C.text3, letterSpacing:1, textTransform:"uppercase", marginTop:3 }}>{l}</div></div>
+              <div key={l}><div style={{ fontSize:26, fontWeight:900, color, lineHeight:1 }}>{n}</div><div style={{ fontSize:10, color:C.statText, letterSpacing:1, textTransform:"uppercase", marginTop:3 }}>{l}</div></div>
             ))}
           </div>
         </div>
