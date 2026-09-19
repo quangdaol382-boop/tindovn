@@ -165,6 +165,9 @@ function Empty({ icon, text }) {
   </div>;
 }
 
+// Lỗi từ database: chỉ hiện nếu là thông báo tiếng Việt do mình viết (vd. "Bạn thao tác quá nhanh...")
+const dbMsg = e => (/[àáảãạăâđêôơưìíòóùúýỳ]/i.test(e?.message || "") ? e.message : "");
+
 // ─── Claude AI qua Vercel Edge Function (tránh CORS) ────────────────────────
 // Vercel tự động làm proxy an toàn, không lộ API key
 const AI_PROXY = "/api/ai";
@@ -209,8 +212,11 @@ async function callGemini(prompt, b64Image = null, mimeType = "image/jpeg") {
   }
 
   if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Server lỗi (${res.status}): ${errText.slice(0, 200)}`);
+    let msg = "";
+    try { msg = (await res.json()).error || ""; } catch { /* không phải JSON */ }
+    if (res.status === 429) throw new Error(msg || "Bạn dùng AI quá nhiều lần. Vui lòng thử lại sau vài phút.");
+    if (res.status === 413) throw new Error("Ảnh quá lớn, vui lòng chọn ảnh nhỏ hơn.");
+    throw new Error(msg || `Máy chủ AI đang lỗi (${res.status}), vui lòng thử lại.`);
   }
 
   const data = await res.json();
@@ -399,7 +405,7 @@ function FaceMatchModal({ onClose, missing }) {
   const search = async () => {
     setPhase("searching"); setErr("");
     const { data, error } = await supabase.rpc("search_face", { p_face: face, p_type: scope || null, p_gender: null });
-    if (error) { setErr("Không tìm được: " + error.message); setPhase("ready"); return; }
+    if (error) { console.error("search_face lỗi:", error); setErr(dbMsg(error) || "Không tìm được, vui lòng thử lại sau."); setPhase("ready"); return; }
     setResults(data || []); setPhase("done");
   };
   const reset = () => { token.current++; setPhase("idle"); setPreview(null); setFace(null); setResults(null); setErr(""); setWarn(""); };
@@ -497,7 +503,7 @@ function PostItemModal({ onClose, onAdd }) {
     setBusy(true); setErr("");
     const res = await onAdd({ id:uid(), type:ptype, ...form, img:catIcon(form.category), date:fmtDate() });
     setBusy(false);
-    if (!res?.ok) { setErr("Không lưu được tin (kiểm tra số điện thoại hoặc thử lại sau)."); return; }
+    if (!res?.ok) { setErr(res?.error || "Không lưu được tin (kiểm tra số điện thoại hoặc thử lại sau)."); return; }
     setDone(true);
     if (res.matches?.length) setMatches(res.matches);
     else setTimeout(onClose, 1800);
@@ -1359,7 +1365,7 @@ export default function App() {
       ho_ten:item.hoTen||"", so_giay_to:item.soGiayTo||"", ngay_sinh:item.ngaySinh||"",
       location:item.location, contact:item.contact, reward:item.reward||"",
       note:item.note||"", img:item.img, date:item.date } });
-    if (error) { console.error("Lỗi lưu tin vào Supabase:", error); return { ok:false }; }
+    if (error) { console.error("Lỗi lưu tin vào Supabase:", error); return { ok:false, error: dbMsg(error) }; }
     setItems(prev=>[{ ...item, id: data?.id ?? item.id }, ...prev]);
     return { ok:true, matches: data?.matches || [] };
   };
@@ -1370,7 +1376,7 @@ export default function App() {
       trang_phuc:m.trangPhuc||"", lan_cuoi_thay:m.lanCuoiThay||"", thoi_gian:m.thoiGian||"",
       contact:m.contact, reward:m.reward||"", urgency:m.urgency||"medium", avatar:m.avatar||"👤", date:m.date,
       face:m.face||null, photo_path:m.photoPath||null, photo_public:!!m.photoPublic } });
-    if (error) { console.error("Lỗi lưu tin vào Supabase:", error); return { ok:false, error:"Không lưu được tin: " + (error.message || "lỗi máy chủ") }; }
+    if (error) { console.error("Lỗi lưu tin vào Supabase:", error); return { ok:false, error: dbMsg(error) || "Không lưu được tin, vui lòng thử lại sau." }; }
     const shown = { ...m, id: data?.id ?? m.id, img: photoUrl(m.photoPath) };
     delete shown.face; delete shown.photoPath; delete shown.photoPublic;   // không giữ vector khuôn mặt trong bộ nhớ trang
     setMissing(prev=>[shown, ...prev]);
