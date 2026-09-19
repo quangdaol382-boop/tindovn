@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { computeFace, compressToJpegBlob, compressToDataUrl } from "./face.js";
 
 // ─── Supabase ─────────────────────────────────────────────────────────────────
 const supabase = createClient(
@@ -295,90 +296,140 @@ Không được bịa thông tin, chỉ điền những gì đọc được rõ 
   );
 }
 
-// ─── AI Face Matcher Modal ────────────────────────────────────────────────────
-function FaceMatchModal({ onClose, missing }) {
-  const [phase, setPhase] = useState("idle");
-  const [preview, setPreview] = useState(null);
-  const [result, setResult] = useState(null);
-  const [err, setErr] = useState("");
-  const b64 = useRef(null);
-  const { pick, inputEl, handleDrop } = useImagePicker((src, b) => { setPreview(src); b64.current=b; setPhase("idle"); setErr(""); setResult(null); });
+// ─── Nhận diện khuôn mặt: tiện ích dùng chung ────────────────────────────────
+const PHOTO_BUCKET = "missing-photos";
+const photoUrl = path => path ? supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl : null;
+const newUuid = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  const b = new Uint8Array(16); crypto.getRandomValues(b);
+  const h = Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+};
+const FACE_LEVELS = {
+  rat_giong: { label:"Rất giống khuôn mặt", color:C.gold },
+  kha_giong: { label:"Khá giống khuôn mặt", color:C.teal },
+  co_the:    { label:"Có thể giống khuôn mặt", color:C.violet },
+  trung_ten: { label:"Trùng họ tên", color:C.text3 },
+};
 
-  const match = async () => {
-    setPhase("scanning"); setErr("");
-    const list = missing.map(m=>`- ID ${m.id}: ${m.hoTen}, ${m.tuoi}, ${m.gioiTinh}, trang phục: ${m.trangPhuc||"không rõ"}, đặc điểm: ${m.danhTich}`).join("\n");
+function PersonMatchCard({ m }) {
+  const lv = FACE_LEVELS[m.level] || FACE_LEVELS.co_the;
+  const url = photoUrl(m.photo_path);
+  const isFound = m.type === "found_person";
+  return (
+    <div style={{ background:C.bg3, border:`1.5px solid ${lv.color}66`, borderRadius:14, padding:"12px 14px", marginBottom:10 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:10, flexWrap:"wrap" }}>
+        <span style={{ fontWeight:800, fontSize:13, color:lv.color }}>{lv.label}</span>
+        <span style={{ fontSize:11, color:C.text3 }}>{isFound ? "Có người đã gặp người này" : "Gia đình đang tìm người này"}</span>
+      </div>
+      <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:10 }}>
+        <div style={{ width:60, height:60, borderRadius:12, background:C.bg, overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, flexShrink:0 }}>
+          {url ? <img src={url} alt="" onError={e=>{e.currentTarget.style.display="none";}} style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : (isFound ? "🟢" : "🔴")}
+        </div>
+        <div style={{ minWidth:0 }}>
+          <div style={{ fontWeight:800, fontSize:15 }}>{m.ho_ten}</div>
+          <div style={{ fontSize:12, color:C.text3 }}>{[m.tuoi, m.gioi_tinh].filter(Boolean).join(" · ")}</div>
+          <div style={{ fontSize:12, color:C.text3 }}>📍 {m.lan_cuoi_thay}{m.thoi_gian ? ` · ${m.thoi_gian}` : ""}</div>
+          <div style={{ fontSize:11, color:C.text3 }}>📅 Đăng ngày {m.date}</div>
+        </div>
+      </div>
+      {m.level === "trung_ten" && <div style={{ fontSize:11, color:C.text3, marginBottom:8 }}>Cùng họ tên nhưng chưa có ảnh để so khuôn mặt — hãy hỏi thêm để xác minh.</div>}
+      {m.reward && !isFound && <div style={{ fontSize:12, color:C.gold, marginBottom:8 }}>🏆 Tiền thưởng: {m.reward}</div>}
+      <a href={`tel:${String(m.contact||"").replace(/[^\d+]/g,"")}`} style={{ display:"block", textAlign:"center", background:`linear-gradient(135deg,${C.rose},${C.roseDark})`, borderRadius:10, padding:"11px", color:"#fff", fontWeight:800, fontSize:14, textDecoration:"none" }}>📞 Gọi {m.contact}</a>
+    </div>
+  );
+}
+
+const FACE_DISCLAIMER = "Đây là gợi ý tự động dựa trên khuôn mặt, có thể sai. Hãy gọi điện và hỏi thêm thông tin (nốt ruồi, sẹo, nơi ở…) trước khi kết luận. Nếu người lạc là trẻ em hoặc người già cần giúp đỡ, hãy báo công an/UBND phường gần nhất.";
+
+// Kết quả dò người khớp ngay sau khi đăng tin
+function PersonMatchResult({ matches, onClose }) {
+  return (
+    <div>
+      <div style={{ textAlign:"center", marginBottom:16 }}>
+        <div style={{ fontSize:48, marginBottom:8 }}>🔔</div>
+        <div style={{ fontWeight:900, fontSize:20, marginBottom:6 }}>Tin đã đăng — có {matches.length} tin có thể khớp!</div>
+        <div style={{ fontSize:12, color:C.text3, lineHeight:1.6 }}>{FACE_DISCLAIMER}</div>
+      </div>
+      {matches.map(m => <PersonMatchCard key={m.id} m={m}/>)}
+      <button onClick={onClose} style={{ ...S.btn(C.bg3, C.text2), marginTop:6 }}>Đóng</button>
+    </div>
+  );
+}
+
+// ─── Tìm người bằng ảnh khuôn mặt ────────────────────────────────────────────
+function FaceMatchModal({ onClose, missing }) {
+  const [preview, setPreview] = useState(null);
+  const [phase, setPhase] = useState("idle");   // idle | analyzing | ready | noface | searching | done | error
+  const [face, setFace] = useState(null);
+  const [warn, setWarn] = useState("");
+  const [err, setErr] = useState("");
+  const [scope, setScope] = useState("");       // "" = tất cả, "missing", "found_person"
+  const [results, setResults] = useState(null);
+  const token = useRef(0);
+  const { pick, inputEl, handleDrop } = useImagePicker(async src => {
+    const my = ++token.current;
+    setPreview(src); setFace(null); setResults(null); setErr(""); setWarn(""); setPhase("analyzing");
     try {
-      const r = await callGemini(
-        `Bạn hỗ trợ tìm người mất tích. Phân tích ngoại hình người trong ảnh và đối chiếu với danh sách:\n${list}
-Trả JSON THUẦN không markdown: {"moTa":{"gioiTinh":"","doTuoi":"","dacDiem":"","trangPhuc":""},"khopID":null,"mucDoKhop":0,"lyDoKhop":"","deXuat":""}
-- khopID: ID số nguyên của người khớp nhất hoặc null nếu không khớp
-- mucDoKhop: 0-100
-- Nếu không phát hiện người: {"loi":"Không phát hiện người trong ảnh"}`,
-        b64.current
-      );
-      if (r.loi) { setErr(r.loi); setPhase("error"); return; }
-      setResult({ ...r, person: missing.find(m=>m.id===r.khopID)||null });
-      setPhase("done");
-    } catch(e) { setErr("Không thể phân tích: " + e.message); setPhase("error"); }
+      const r = await computeFace(src);
+      if (my !== token.current) return;
+      if (!r.ok) { setPhase("noface"); return; }
+      setFace(r.descriptor);
+      setWarn([r.faces > 1 ? `Ảnh có ${r.faces} khuôn mặt — hệ thống dùng khuôn mặt lớn nhất.` : "", r.tooSmall ? "Khuôn mặt hơi nhỏ nên kết quả có thể kém chính xác — hãy thử ảnh cận mặt hơn." : ""].filter(Boolean).join(" "));
+      setPhase("ready");
+    } catch (e) {
+      if (my === token.current) { setErr("Không phân tích được ảnh: " + (e.message || e)); setPhase("error"); }
+    }
+  });
+  const search = async () => {
+    setPhase("searching"); setErr("");
+    const { data, error } = await supabase.rpc("search_face", { p_face: face, p_type: scope || null, p_gender: null });
+    if (error) { setErr("Không tìm được: " + error.message); setPhase("ready"); return; }
+    setResults(data || []); setPhase("done");
   };
+  const reset = () => { token.current++; setPhase("idle"); setPreview(null); setFace(null); setResults(null); setErr(""); setWarn(""); };
+  const total = (missing || []).length;
 
   return (
-    <Modal onClose={onClose} style={{ maxWidth:500 }}>
+    <Modal onClose={onClose} style={{ maxWidth:500, maxHeight:"92vh", overflowY:"auto" }}>
       {inputEl}
       <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:18 }}>
         <div style={{ width:44, height:44, borderRadius:12, background:`linear-gradient(135deg,${C.rose},${C.roseDark})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>🔎</div>
-        <div><div style={{ fontWeight:800, fontSize:18 }}>AI Đối Chiếu Người Mất Tích</div><div style={{ fontSize:12, color:C.text3 }}>Tải ảnh → AI so sánh với {missing.length} hồ sơ</div></div>
+        <div><div style={{ fontWeight:800, fontSize:18 }}>Tìm người bằng khuôn mặt</div><div style={{ fontSize:12, color:C.text3 }}>So khuôn mặt — không phụ thuộc quần áo{total ? ` · ${total} hồ sơ đang tìm` : ""}</div></div>
       </div>
-      <div style={{ background:`${C.rose}0A`, border:`1px solid ${C.rose}25`, borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:12, color:"#FF9AB9" }}>
-        ⚠️ AI phân tích <strong>đặc điểm ngoại hình</strong> để gợi ý — không đảm bảo 100% chính xác. Luôn xác nhận qua liên hệ trực tiếp.
+      <div style={{ background:`${C.rose}0A`, border:`1px solid ${C.rose}25`, borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:"#FF9AB9", lineHeight:1.6 }}>
+        ⚠️ Kết quả chỉ là <strong>gợi ý</strong>, không đảm bảo chính xác. Luôn xác nhận qua điện thoại.<br/>
+        🔒 Ảnh được xử lý ngay trên máy bạn, <strong>không tải lên</strong> và không được lưu lại.
+      </div>
+      <div style={{ display:"flex", gap:4, background:C.bg, borderRadius:12, padding:4, marginBottom:14 }}>
+        {[["","Tất cả"],["missing","Đang mất tích"],["found_person","Đã gặp người lạc"]].map(([v,l])=>(
+          <button key={v} onClick={()=>{ setScope(v); setResults(null); if (phase==="done") setPhase("ready"); }} style={{ flex:1, padding:"8px 6px", borderRadius:9, border:"none", background:scope===v?C.rose:"transparent", color:scope===v?"#fff":C.text3, fontWeight:700, fontSize:12, cursor:"pointer" }}>{l}</button>
+        ))}
       </div>
       <div onDragOver={e=>e.preventDefault()} onDrop={handleDrop} onClick={pick}
         style={{ border:`2px dashed ${preview?C.rose:C.border2}`, borderRadius:14, padding:preview?"8px":"30px 20px", textAlign:"center", cursor:"pointer", background:preview?`${C.rose}05`:C.bg, marginBottom:12, minHeight:120, display:"flex", alignItems:"center", justifyContent:"center" }}>
         {preview ? <img src={preview} alt="" style={{ maxHeight:200, maxWidth:"100%", borderRadius:10, objectFit:"contain" }}/>
-          : <div><div style={{ fontSize:40, marginBottom:10 }}>👤</div><div style={{ fontWeight:700, fontSize:15 }}>Tải ảnh người cần đối chiếu</div><div style={{ fontSize:12, color:C.text3, marginTop:4 }}>Ảnh rõ mặt cho kết quả chính xác hơn</div></div>}
+          : <div><div style={{ fontSize:40, marginBottom:10 }}>👤</div><div style={{ fontWeight:700, fontSize:15 }}>Tải ảnh người cần đối chiếu</div><div style={{ fontSize:12, color:C.text3, marginTop:4 }}>Ảnh rõ mặt, nhìn thẳng cho kết quả tốt nhất</div></div>}
       </div>
-      {preview && phase!=="scanning" && <button onClick={pick} style={{ background:"transparent", border:`1px solid ${C.border2}`, borderRadius:8, padding:"5px 12px", color:C.text3, fontSize:12, cursor:"pointer", marginBottom:12 }}>🔄 Đổi ảnh</button>}
+      {preview && phase!=="analyzing" && phase!=="searching" && <button onClick={pick} style={{ background:"transparent", border:`1px solid ${C.border2}`, borderRadius:8, padding:"5px 12px", color:C.text3, fontSize:12, cursor:"pointer", marginBottom:12 }}>🔄 Đổi ảnh</button>}
+      {phase==="analyzing" && <div style={{ textAlign:"center", padding:"14px 0", color:C.text2, fontSize:13 }}><span style={{ display:"inline-block", animation:"spin 1.2s linear infinite", marginRight:8 }}>🔄</span>Đang phân tích khuôn mặt… (lần đầu có thể mất vài giây)</div>}
+      {phase==="noface" && <div style={{ background:"rgba(255,80,80,0.08)", border:"1px solid rgba(255,80,80,0.25)", borderRadius:10, padding:"10px 14px", marginBottom:12, color:"#FF7070", fontSize:13 }}>⚠️ Không thấy khuôn mặt rõ trong ảnh. Hãy thử ảnh chụp rõ mặt, đủ sáng, nhìn thẳng.</div>}
       {err && <div style={{ background:"rgba(255,80,80,0.08)", border:"1px solid rgba(255,80,80,0.25)", borderRadius:10, padding:"10px 14px", marginBottom:12, color:"#FF7070", fontSize:13 }}>⚠️ {err}</div>}
-      {phase==="scanning" && <div style={{ textAlign:"center", padding:"32px 0" }}>
-        <div style={{ fontSize:44, marginBottom:12, display:"inline-block", animation:"spin 1.2s linear infinite" }}>🔄</div>
-        <div style={{ fontWeight:700 }}>Đang đối chiếu {missing.length} hồ sơ…</div>
-        <div style={{ color:C.text3, fontSize:13, marginTop:6, animation:"pulse 1.5s ease infinite" }}>Phân tích ngoại hình & so khớp</div>
-      </div>}
-      {phase==="done" && result && <>
-        {preview && <img src={preview} alt="" style={{ width:"100%", maxHeight:120, objectFit:"cover", objectPosition:"top", borderRadius:10, marginBottom:14 }}/>}
-        <div style={{ background:C.bg, borderRadius:12, padding:"12px 14px", marginBottom:14 }}>
-          <SectionTitle icon="👁️" text="AI phát hiện trong ảnh"/>
-          {[["Giới tính",result.moTa?.gioiTinh],["Độ tuổi",result.moTa?.doTuoi],["Đặc điểm",result.moTa?.dacDiem],["Trang phục",result.moTa?.trangPhuc]].map(([k,v])=><InfoRow key={k} label={k} value={v}/>)}
+      {warn && (phase==="ready"||phase==="done") && <div style={{ fontSize:12, color:C.gold, marginBottom:12 }}>ℹ️ {warn}</div>}
+      {phase==="searching" && <div style={{ textAlign:"center", padding:"20px 0" }}><div style={{ fontSize:38, display:"inline-block", animation:"spin 1.2s linear infinite" }}>🔄</div><div style={{ fontWeight:700, marginTop:8 }}>Đang so khớp…</div></div>}
+      {phase==="done" && results && (results.length ? <>
+        <div style={{ fontWeight:800, fontSize:15, marginBottom:10 }}>⚡ Tìm thấy {results.length} hồ sơ có khuôn mặt giống</div>
+        {results.map(m => <PersonMatchCard key={m.id} m={m}/>)}
+        <div style={{ fontSize:11, color:C.text3, lineHeight:1.6, margin:"4px 0 12px" }}>{FACE_DISCLAIMER}</div>
+      </> : (
+        <div style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${C.border}`, borderRadius:12, padding:"18px 16px", marginBottom:14, textAlign:"center" }}>
+          <div style={{ fontSize:32, marginBottom:8 }}>🔍</div>
+          <div style={{ fontWeight:700, fontSize:15, marginBottom:4 }}>Chưa có hồ sơ nào có khuôn mặt giống</div>
+          <div style={{ fontSize:13, color:C.text3, lineHeight:1.6 }}>Hãy <strong>đăng tin kèm ảnh</strong> — khi sau này có người đăng tin về đúng người này, hệ thống sẽ hiện ngay số liên hệ của bạn cho họ.</div>
         </div>
-        {result.person && result.mucDoKhop>=40 ? (
-          <div style={{ background:`linear-gradient(135deg,${C.rose}15,${C.roseDark}08)`, border:`1.5px solid ${C.rose}40`, borderRadius:14, padding:18, marginBottom:14 }}>
-            <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:12 }}>
-              <span style={{ fontSize:32 }}>{result.person.avatar}</span>
-              <div>
-                <div style={{ color:C.gold, fontWeight:800, fontSize:14 }}>⚡ Có thể khớp!</div>
-                <div style={{ fontSize:12, color:C.text3 }}>Độ tương đồng: <strong style={{ color:C.rose, fontSize:15 }}>{result.mucDoKhop}%</strong></div>
-              </div>
-            </div>
-            <div style={{ fontWeight:800, fontSize:17, marginBottom:4 }}>{result.person.hoTen}</div>
-            <div style={{ fontSize:13, color:C.text3, marginBottom:4 }}>{result.person.tuoi} · {result.person.gioiTinh}</div>
-            <div style={{ fontSize:12, color:"#666", marginBottom:8 }}>📍 {result.person.lanCuoiThay}</div>
-            {result.lyDoKhop && <div style={{ fontSize:12, color:C.text2, background:"rgba(255,255,255,0.04)", borderRadius:8, padding:"8px 10px", marginBottom:14 }}>💬 {result.lyDoKhop}</div>}
-            <a href={`tel:${result.person.contact}`} style={{ display:"block", background:`linear-gradient(135deg,${C.rose},${C.roseDark})`, borderRadius:10, padding:"13px", color:"#fff", fontWeight:800, textDecoration:"none", textAlign:"center", fontSize:15 }}>
-              📞 Gọi ngay cho gia đình: {result.person.contact}
-            </a>
-            {result.person.reward && <div style={{ textAlign:"center", marginTop:8, fontSize:12, color:C.gold }}>🏆 Tiền thưởng: {result.person.reward}</div>}
-          </div>
-        ) : (
-          <div style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${C.border}`, borderRadius:12, padding:"18px 16px", marginBottom:14, textAlign:"center" }}>
-            <div style={{ fontSize:32, marginBottom:8 }}>🔍</div>
-            <div style={{ fontWeight:700, fontSize:15, marginBottom:4 }}>Chưa khớp với hồ sơ nào</div>
-            <div style={{ fontSize:13, color:C.text3 }}>Bạn vẫn nên đăng tin báo để gia đình nhận ra</div>
-          </div>
-        )}
-        {result.deXuat && <div style={{ fontSize:13, color:C.text2, background:`${C.violet}10`, border:`1px solid ${C.violet}20`, borderRadius:10, padding:"10px 13px", marginBottom:14 }}>💡 {result.deXuat}</div>}
-        <button onClick={()=>{setPhase("idle");setPreview(null);setResult(null);b64.current=null;}} style={{ ...S.btn("#222","#aaa"), width:"auto", padding:"9px 18px", fontSize:13 }}>← Đối chiếu ảnh khác</button>
-      </>}
-      {(phase==="idle"||phase==="error") && preview && <button onClick={match} style={S.btn(`linear-gradient(135deg,${C.rose},${C.roseDark})`)}>🔎 Đối chiếu ngay</button>}
+      ))}
+      {phase==="done" && <button onClick={reset} style={{ ...S.btn("#222","#aaa"), width:"auto", padding:"9px 18px", fontSize:13 }}>← Đối chiếu ảnh khác</button>}
+      {(phase==="ready"||phase==="error") && face && <button onClick={search} style={S.btn(`linear-gradient(135deg,${C.rose},${C.roseDark})`)}>🔎 Tìm người giống khuôn mặt này</button>}
       {!preview && <button disabled style={S.btn("#1C1C1C","#444")}>🔎 Chọn ảnh trước</button>}
     </Modal>
   );
@@ -487,77 +538,142 @@ function PostMissingModal({ onClose, onAdd }) {
   const [form, setForm] = useState(emptyMissing);
   const [done, setDone] = useState(false);
   const [imgPrev, setImgPrev] = useState(null);
-  const [scanning, setScanning] = useState(false);
+  const [faceState, setFaceState] = useState("idle");   // idle | loading | ok | none | error
+  const [face, setFace] = useState(null);
+  const [faceNote, setFaceNote] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiMsg, setAiMsg] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [publicPhoto, setPublicPhoto] = useState(null); // null = theo mặc định của loại tin
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [matches, setMatches] = useState(null);
+  const token = useRef(0);
   const set = k => v => setForm(f=>({...f,[k]:v}));
-  const { pick, inputEl } = useImagePicker(async (src, b64) => {
-    setImgPrev(src); setScanning(true);
-    try {
-     try {
-    const rawResult = await callGemini(`Mô tả người trong ảnh. Chỉ trả về JSON duy nhất với cấu trúc: {"doTuoi": "...", "gioiTinh": "...", "danhTich": "..."}`);
-    
-    // Thêm bước kiểm tra để đảm bảo r là đối tượng JSON
-    let r;
-    try {
-        r = typeof rawResult === 'string' ? JSON.parse(rawResult) : rawResult;
-    } catch (e) {
-        console.error("Lỗi parse JSON:", e);
-        r = {}; // Gán rỗng nếu không parse được
-    }
+  // Mặc định: gia đình đang tìm người -> hiện ảnh công khai; người gặp người lạc -> KHÔNG hiện ảnh công khai
+  const showPhoto = publicPhoto ?? (ptype === "missing");
 
-    console.log("--- BẮT ĐẦU NHẬN DỮ LIỆU TỪ AI ---");
-    setForm(f => ({ 
-        ...f, 
-        tuoi: r.doTuoi || f.tuoi, 
-        gioiTinh: r.gioiTinh || f.gioiTinh, 
-        danhTich: r.danhTich || f.danhTich 
-    }));
-} catch (e) {
-    console.error("Lỗi gọi Gemini:", e);
-}
-    } catch {}
-    setScanning(false);
+  const { pick, inputEl } = useImagePicker(async src => {
+    const my = ++token.current;
+    setImgPrev(src); setFace(null); setFaceNote(""); setAiMsg(""); setFaceState("loading");
+    try {
+      const r = await computeFace(src);
+      if (my !== token.current) return;
+      if (!r.ok) { setFaceState("none"); return; }
+      setFace(r.descriptor);
+      setFaceNote([r.faces > 1 ? `Ảnh có ${r.faces} khuôn mặt — dùng khuôn mặt lớn nhất.` : "", r.tooSmall ? "Khuôn mặt hơi nhỏ, độ chính xác có thể giảm — nên dùng ảnh cận mặt." : ""].filter(Boolean).join(" "));
+      setFaceState("ok");
+    } catch (e) {
+      console.error("Nhận diện khuôn mặt lỗi:", e);
+      if (my === token.current) setFaceState("error");
+    }
   });
-  const submit = () => {
-    if (!form.hoTen || !form.lanCuoiThay || !form.contact) return;
-    const avatars = { "Nam":ptype==="missing"?"🧑":"👦", "Nữ":ptype==="missing"?"👩":"👧" };
-    onAdd({ id:uid(), type:ptype, ...form, avatar:avatars[form.gioiTinh]||"👤", date:fmtDate(), img:imgPrev });
-    setDone(true); setTimeout(onClose, 1800);
+  const removePhoto = () => { token.current++; setImgPrev(null); setFace(null); setFaceNote(""); setAiMsg(""); setFaceState("idle"); setConsent(false); };
+
+  const describeWithAI = async () => {
+    if (!imgPrev || aiBusy) return;
+    setAiBusy(true); setAiMsg("");
+    try {
+      const small = await compressToDataUrl(imgPrev, 800, 0.8);
+      const r = await callGemini(
+        `Mô tả ngoại hình người trong ảnh để đăng tin tìm người thân (KHÔNG đoán danh tính). Chỉ trả về JSON duy nhất: {"doTuoi":"khoảng ... tuổi","gioiTinh":"Nam hoặc Nữ hoặc Không rõ","danhTich":"đặc điểm nhận dạng: dáng người, tóc, nốt ruồi, sẹo, kính…"}`,
+        small.split(",")[1], "image/jpeg");
+      setForm(f => ({ ...f,
+        tuoi: f.tuoi || r.doTuoi || "",
+        gioiTinh: ["Nam","Nữ"].includes(r.gioiTinh) ? r.gioiTinh : f.gioiTinh,
+        danhTich: f.danhTich || r.danhTich || "" }));
+      setAiMsg("✅ Đã điền gợi ý vào form — hãy kiểm tra lại cho đúng.");
+    } catch (e) { setAiMsg("Không nhờ AI mô tả được: " + (e.message || e)); }
+    setAiBusy(false);
   };
+
+  const submit = async () => {
+    if (busy) return;
+    if (!form.hoTen || !form.lanCuoiThay || !form.contact) { setErr("Vui lòng điền Họ và tên, Địa điểm lần cuối thấy và Số điện thoại."); return; }
+    if (faceState === "loading") { setErr("Đang phân tích ảnh, vui lòng chờ vài giây rồi bấm lại."); return; }
+    if (imgPrev && !consent) { setErr("Vui lòng tích ô xác nhận về ảnh/khuôn mặt (hoặc bấm “Bỏ ảnh”)."); return; }
+    setBusy(true); setErr("");
+    try {
+      let photoPath = null;
+      if (imgPrev && showPhoto) {
+        let blob = await compressToJpegBlob(imgPrev, 800, 0.82);
+        if (blob.size > 900 * 1024) blob = await compressToJpegBlob(imgPrev, 600, 0.6);
+        photoPath = newUuid() + ".jpg";
+        const up = await supabase.storage.from(PHOTO_BUCKET).upload(photoPath, blob, { contentType:"image/jpeg", upsert:false });
+        if (up.error) throw new Error("Không tải được ảnh lên: " + up.error.message + ". Bạn có thể bỏ tích “hiển thị ảnh công khai” rồi đăng lại.");
+      }
+      const avatars = { "Nam":ptype==="missing"?"🧑":"👦", "Nữ":ptype==="missing"?"👩":"👧" };
+      const note = form.tieuChuan.trim();
+      const res = await onAdd({
+        id:uid(), type:ptype, ...form,
+        danhTich: (form.danhTich + (note ? `\nLưu ý: ${note}` : "")).trim(),
+        avatar:avatars[form.gioiTinh]||"👤", date:fmtDate(),
+        face: face || null, photoPath, photoPublic: !!photoPath,
+      });
+      if (!res?.ok) throw new Error(res?.error || "Không lưu được tin, vui lòng thử lại.");
+      setDone(true);
+      if (res.matches?.length) setMatches(res.matches); else setTimeout(onClose, 1800);
+    } catch (e) { setErr(e.message || "Có lỗi xảy ra, vui lòng thử lại."); }
+    setBusy(false);
+  };
+  const tone = ptype==="missing" ? C.rose : C.teal;
+  const chk = { display:"flex", gap:10, alignItems:"flex-start", fontSize:12, color:C.text2, lineHeight:1.6, cursor:"pointer", marginBottom:8 };
   return (
     <Modal onClose={onClose} style={{ maxHeight:"92vh", overflowY:"auto" }}>
       {inputEl}
-      {done ? <div style={{ textAlign:"center", padding:"50px 0" }}><div style={{ fontSize:60, marginBottom:16 }}>🙏</div><div style={{ fontWeight:900, fontSize:22, marginBottom:8 }}>Tin đã được đăng!</div></div> : <>
+      {done && matches?.length ? <PersonMatchResult matches={matches} onClose={onClose}/> : done ? <div style={{ textAlign:"center", padding:"50px 0" }}><div style={{ fontSize:60, marginBottom:16 }}>🙏</div><div style={{ fontWeight:900, fontSize:22, marginBottom:8 }}>Tin đã được đăng!</div><div style={{ fontSize:13, color:C.text3 }}>Chưa thấy tin nào khớp lúc này. Khi có người đăng tin về đúng người này, họ sẽ thấy số liên hệ của bạn.</div></div> : <>
         <div style={{ fontWeight:900, fontSize:20, marginBottom:20 }}>👤 Đăng tin tìm người thân</div>
         <div style={{ display:"flex", gap:4, background:C.bg, borderRadius:12, padding:4, marginBottom:20 }}>
           {[["missing","🔴 Tôi đang tìm"],["found_person","🟢 Tôi gặp người lạc"]].map(([v,l])=>(
             <button key={v} onClick={()=>setPtype(v)} style={{ flex:1, padding:"10px 8px", borderRadius:9, border:"none", background:ptype===v?(v==="missing"?C.rose:C.teal):"transparent", color:ptype===v?"#fff":C.text3, fontWeight:700, fontSize:13, cursor:"pointer" }}>{l}</button>
           ))}
         </div>
-        <div style={{ marginBottom:18 }}>
+        <div style={{ marginBottom:14 }}>
           <label style={{ display:"block", fontSize:11, color:C.text3, marginBottom:8, fontWeight:700, textTransform:"uppercase", letterSpacing:0.8 }}>
-            Ảnh người cần tìm {scanning && <span style={{ color:C.violet, fontWeight:400, textTransform:"none" }}>· AI đang mô tả…</span>}
+            Ảnh khuôn mặt {ptype==="missing" ? "người cần tìm" : "người bạn gặp"} <span style={{ color:C.violet, fontWeight:400, textTransform:"none" }}>· giúp hệ thống nhận ra dù đổi quần áo</span>
           </label>
-          <div onClick={pick} style={{ border:`2px dashed ${imgPrev?C.rose:C.border2}`, borderRadius:12, padding:imgPrev?"8px":"22px", textAlign:"center", cursor:"pointer", background:imgPrev?`${C.rose}04`:C.bg, minHeight:100, display:"flex", alignItems:"center", justifyContent:"center" }}>
-            {imgPrev ? <div style={{ position:"relative", width:"100%" }}><img src={imgPrev} alt="" style={{ maxHeight:140, maxWidth:"100%", borderRadius:8, objectFit:"contain" }}/>{scanning && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.55)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, color:"#fff" }}>🤖 AI đang mô tả…</div>}</div>
-            : <div><div style={{ fontSize:34, marginBottom:8 }}>🖼️</div><div style={{ fontWeight:700, fontSize:14 }}>Tải ảnh người thân</div><div style={{ fontSize:12, color:C.text3, marginTop:4 }}>AI sẽ tự điền đặc điểm ngoại hình</div></div>}
+          <div onClick={pick} style={{ border:`2px dashed ${imgPrev?tone:C.border2}`, borderRadius:12, padding:imgPrev?"8px":"22px", textAlign:"center", cursor:"pointer", background:imgPrev?`${tone}04`:C.bg, minHeight:100, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            {imgPrev ? <div style={{ position:"relative", width:"100%" }}><img src={imgPrev} alt="" style={{ maxHeight:160, maxWidth:"100%", borderRadius:8, objectFit:"contain" }}/>{faceState==="loading" && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.55)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, color:"#fff" }}>⏳ Đang phân tích khuôn mặt…</div>}</div>
+            : <div><div style={{ fontSize:34, marginBottom:8 }}>🖼️</div><div style={{ fontWeight:700, fontSize:14 }}>Tải ảnh rõ mặt</div><div style={{ fontSize:12, color:C.text3, marginTop:4 }}>Ảnh chụp thẳng, đủ sáng cho kết quả tốt nhất</div></div>}
           </div>
+          {imgPrev && <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap" }}>
+            <button onClick={pick} style={{ background:"transparent", border:`1px solid ${C.border2}`, borderRadius:8, padding:"5px 12px", color:C.text3, fontSize:12, cursor:"pointer" }}>🔄 Đổi ảnh</button>
+            <button onClick={removePhoto} style={{ background:"transparent", border:`1px solid ${C.border2}`, borderRadius:8, padding:"5px 12px", color:C.text3, fontSize:12, cursor:"pointer" }}>✖ Bỏ ảnh</button>
+            <button onClick={describeWithAI} disabled={aiBusy} style={{ background:`${C.violet}22`, border:`1px solid ${C.violet}55`, borderRadius:8, padding:"5px 12px", color:"#C9C3FF", fontSize:12, cursor:"pointer", opacity:aiBusy?0.6:1 }}>{aiBusy ? "🤖 AI đang mô tả…" : "🤖 Nhờ AI mô tả giúp"}</button>
+          </div>}
+          {aiMsg && <div style={{ fontSize:12, color:C.text2, marginTop:6 }}>{aiMsg}</div>}
+          {imgPrev && <div style={{ fontSize:11, color:C.text3, marginTop:4 }}>Nút “Nhờ AI mô tả” sẽ gửi một bản ảnh nhỏ tới dịch vụ AI (Claude) để mô tả ngoại hình. Nhận diện khuôn mặt thì chạy ngay trên máy bạn.</div>}
+          {faceState==="ok" && <div style={{ fontSize:12, color:C.accent, marginTop:8 }}>✅ Đã nhận diện khuôn mặt — hệ thống sẽ dò các tin khớp {ptype==="missing" ? "trong danh sách người đã được gặp" : "trong danh sách người đang được tìm"}. {faceNote && <span style={{ color:C.gold }}>{faceNote}</span>}</div>}
+          {faceState==="none" && <div style={{ fontSize:12, color:C.gold, marginTop:8 }}>⚠️ Không thấy khuôn mặt rõ trong ảnh. Vẫn đăng được nhưng hệ thống chỉ dò theo họ tên. Hãy thử ảnh chụp rõ mặt hơn.</div>}
+          {faceState==="error" && <div style={{ fontSize:12, color:C.gold, marginTop:8 }}>⚠️ Trình duyệt này không chạy được nhận diện khuôn mặt. Bạn vẫn đăng được tin (dò theo họ tên).</div>}
         </div>
         <Field label="Họ và tên" value={form.hoTen} onChange={set("hoTen")} placeholder={ptype==="missing"?"Nguyễn Thị Lan":"Không rõ tên"} required/>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
           <Field label="Tuổi / Năm sinh" value={form.tuoi} onChange={set("tuoi")} placeholder="72 tuổi / 1952"/>
           <Select label="Giới tính" value={form.gioiTinh} onChange={set("gioiTinh")} options={["Nam","Nữ","Không rõ"]}/>
         </div>
-        <Field label="Đặc điểm nhận dạng" value={form.danhTich} onChange={set("danhTich")} placeholder="Tóc bạc, chiều cao ~1m55, hay mặc áo bà ba…" multiline required hint="Mô tả càng chi tiết càng dễ nhận ra"/>
+        <Field label="Đặc điểm nhận dạng" value={form.danhTich} onChange={set("danhTich")} placeholder="Tóc bạc, chiều cao ~1m55, nốt ruồi má trái…" multiline required hint="Mô tả càng chi tiết càng dễ nhận ra"/>
         <Field label="Trang phục khi mất tích" value={form.trangPhuc} onChange={set("trangPhuc")} placeholder="Áo bà ba xanh, quần đen, dép tổ ong"/>
         <Field label="Địa điểm lần cuối thấy" value={form.lanCuoiThay} onChange={set("lanCuoiThay")} placeholder="Chợ Bến Thành, Quận 1, TP.HCM" required/>
         <Field label="Thời gian" value={form.thoiGian} onChange={set("thoiGian")} placeholder="14:00 ngày 16/05/2026"/>
         {ptype==="missing" && <>
-          <Field label="Thông tin sức khỏe / lưu ý" value={form.tieuChuan} onChange={set("tieuChuan")} placeholder="Bệnh nền, thuốc đang dùng…" multiline/>
+          <Field label="Lưu ý thêm (hiển thị công khai)" value={form.tieuChuan} onChange={set("tieuChuan")} placeholder="VD: người hay quên đường, cần dùng thuốc…" multiline hint="Tin đăng là công khai — không ghi bệnh án chi tiết"/>
           <Select label="Mức độ khẩn cấp" value={form.urgency} onChange={set("urgency")} options={[["high","🚨 Khẩn cấp"],["medium","⚠️ Bình thường"]]}/>
         </>}
         <Field label="Số điện thoại liên hệ" value={form.contact} onChange={set("contact")} placeholder="0901 234 567" type="tel" required/>
         {ptype==="missing" && <Field label="Tiền thưởng (nếu có)" value={form.reward} onChange={set("reward")} placeholder="VD: 2.000.000đ"/>}
-        <button onClick={submit} style={S.btn(`linear-gradient(135deg,${ptype==="missing"?C.rose:C.teal},${ptype==="missing"?C.roseDark:C.tealDark})`)}>🙏 Đăng tin ngay</button>
+        {imgPrev && <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:14 }}>
+          <label style={chk}>
+            <input type="checkbox" checked={showPhoto} onChange={e=>setPublicPhoto(e.target.checked)} style={{ marginTop:3 }}/>
+            <span><strong>Hiển thị ảnh công khai trên trang</strong>{ptype==="found_person" ? " — mặc định TẮT để bảo vệ người bạn gặp; hệ thống vẫn so khuôn mặt và báo cho gia đình đang tìm." : " — giúp nhiều người nhận ra hơn."}</span>
+          </label>
+          <label style={{ ...chk, marginBottom:0 }}>
+            <input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)} style={{ marginTop:3 }}/>
+            <span>Tôi đăng ảnh này với mục đích giúp {ptype==="missing" ? "tìm người thân" : "người lạc đoàn tụ với gia đình"}, và đồng ý để hệ thống lưu <strong>dãy số đặc trưng khuôn mặt</strong> (không phải ảnh) để đối chiếu. Tôi sẽ nhờ quản trị viên đóng tin khi đã tìm thấy.</span>
+          </label>
+        </div>}
+        {err && <div style={{ background:"rgba(255,79,123,0.12)", border:`1px solid ${C.rose}`, borderRadius:10, padding:"9px 12px", fontSize:13, color:C.rose, marginBottom:12 }}>{err}</div>}
+        <button onClick={submit} disabled={busy} style={{ ...S.btn(`linear-gradient(135deg,${tone},${ptype==="missing"?C.roseDark:C.tealDark})`), opacity:busy?0.6:1 }}>{busy ? "Đang đăng…" : "🙏 Đăng tin ngay"}</button>
       </>}
     </Modal>
   );
@@ -998,7 +1114,7 @@ function AdminPanel({ onExit }) {
   const loadAll = useCallback(async () => {
     setMsg("");
     const a = await supabase.from("items").select("*").order("created_at", { ascending:false }).limit(500);
-    const b = await supabase.from("missing_persons").select("*").order("created_at", { ascending:false }).limit(500);
+    const b = await supabase.from("missing_persons").select("id,created_at,type,ho_ten,tuoi,gioi_tinh,danh_tich,trang_phuc,lan_cuoi_thay,thoi_gian,contact,reward,urgency,avatar,date,status,photo_path,photo_public").order("created_at", { ascending:false }).limit(500);
     if (a.error || b.error) setMsg("Không tải được dữ liệu: " + (a.error?.message || b.error?.message));
     setAdminItems(a.data || []); setPersons(b.data || []);
   }, []);
@@ -1016,8 +1132,22 @@ function AdminPanel({ onExit }) {
     const { data, error } = await supabase.from(table).delete().eq("id", row.id).select();
     if (error || !data?.length) { setMsg("Không xóa được: " + (error?.message || "không có quyền hoặc tin không còn tồn tại")); return; }
     if (table === "items") setAdminItems(p => p.filter(x => x.id !== row.id));
-    else setPersons(p => p.filter(x => x.id !== row.id));
+    else {
+      setPersons(p => p.filter(x => x.id !== row.id));
+      if (row.photo_path) await supabase.storage.from(PHOTO_BUCKET).remove([row.photo_path]);
+    }
     setMsg("Đã xóa.");
+  };
+
+  const markPersonFound = async row => {
+    if (!window.confirm("Đánh dấu ĐÃ TÌM THẤY?\n\nTin sẽ ẩn khỏi trang công khai, dữ liệu khuôn mặt và ảnh sẽ bị xóa (không hoàn lại được).\n\n" + (row.ho_ten || ""))) return;
+    const { data, error } = await supabase.from("missing_persons")
+      .update({ status:"resolved", resolved_at:new Date().toISOString(), face_embedding:null, photo_public:false })
+      .eq("id", row.id).select("id");
+    if (error || !data?.length) { setMsg("Không cập nhật được: " + (error?.message || "không có quyền")); return; }
+    if (row.photo_path) await supabase.storage.from(PHOTO_BUCKET).remove([row.photo_path]);
+    setPersons(p => p.map(x => x.id === row.id ? { ...x, status:"resolved", photo_path:null, photo_public:false } : x));
+    setMsg("Đã đánh dấu đã tìm thấy; đã xóa dữ liệu khuôn mặt và ảnh.");
   };
 
   const toggleResolved = async row => {
@@ -1128,17 +1258,24 @@ function AdminPanel({ onExit }) {
         <div style={{ fontSize:12, color:C.text3, marginBottom:8 }}>Hiển thị {Math.min(shownPersons.length, 200)}/{shownPersons.length} tin. Xóa là vĩnh viễn.</div>
         {shownPersons.slice(0, 200).map(row => (
           <div key={row.id} style={card}>
-            <div style={{ marginBottom:6 }}>
-              <span style={badge(C.rose)}>{row.type === "missing" ? "MẤT TÍCH" : row.type === "found" ? "TÌM THẤY" : String(row.type || "").toUpperCase()}</span>
-              {row.urgency === "high" && <span style={badge(C.gold)}>KHẨN</span>}
+            <div style={{ display:"flex", gap:12 }}>
+              {row.photo_path && <img src={photoUrl(row.photo_path)} alt="" style={{ width:64, height:64, borderRadius:10, objectFit:"cover", flexShrink:0 }}/>}
+              <div style={{ minWidth:0 }}>
+                <div style={{ marginBottom:6 }}>
+                  <span style={badge(row.type === "found_person" ? C.teal : C.rose)}>{row.type === "missing" ? "ĐANG TÌM NGƯỜI" : row.type === "found_person" ? "ĐÃ GẶP NGƯỜI LẠC" : String(row.type || "").toUpperCase()}</span>
+                  {row.urgency === "high" && row.type === "missing" && <span style={badge(C.gold)}>KHẨN</span>}
+                  {row.status === "resolved" && <span style={badge(C.accent)}>ĐÃ TÌM THẤY</span>}
+                </div>
+                <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>{row.ho_ten} {row.tuoi ? `· ${row.tuoi}` : ""} {row.gioi_tinh ? `· ${row.gioi_tinh}` : ""}</div>
+              </div>
             </div>
-            <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>{row.ho_ten} {row.tuoi ? `· ${row.tuoi}` : ""} {row.gioi_tinh ? `· ${row.gioi_tinh}` : ""}</div>
             <div style={{ fontSize:12, color:C.text2, lineHeight:1.7 }}>
               {row.danh_tich && <div>🔎 {row.danh_tich}</div>}
               {row.lan_cuoi_thay && <div>📍 {row.lan_cuoi_thay} {row.thoi_gian ? `· ${row.thoi_gian}` : ""}</div>}
               <div>📞 {row.contact} · 📅 {row.date}</div>
             </div>
-            <div style={{ display:"flex", gap:8, marginTop:10 }}>
+            <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
+              {row.status !== "resolved" && <button onClick={() => markPersonFound(row)} style={btnSm(C.accent)}>✅ Đã tìm thấy</button>}
               <button onClick={() => removeRow("missing_persons", row, row.ho_ten || "")} style={btnSm(C.rose)}>🗑 Xóa</button>
             </div>
           </div>
@@ -1176,9 +1313,9 @@ export default function App() {
     const load = async () => {
       try {
         const { data: d1 } = await supabase.from("items_public").select("*").order("created_at", { ascending: false });
-        const { data: d2 } = await supabase.from("missing_persons").select("*").order("created_at", { ascending: false });
+        const { data: d2 } = await supabase.from("missing_public").select("*").order("created_at", { ascending: false });
         if (d1?.length > 0) setItems(d1.map(i => ({ ...i, category:normalizeCategory(i.category), hoTen:i.ho_ten, soGiayTo:i.so_giay_to, ngaySinh:i.ngay_sinh })));
-        if (d2?.length > 0) setMissing(d2.map(m => ({ ...m, hoTen:m.ho_ten, gioiTinh:m.gioi_tinh, danhTich:m.danh_tich, trangPhuc:m.trang_phuc, lanCuoiThay:m.lan_cuoi_thay, thoiGian:m.thoi_gian })));
+        if (d2?.length > 0) setMissing(d2.map(m => ({ ...m, hoTen:m.ho_ten||"", tuoi:m.tuoi||"", gioiTinh:m.gioi_tinh||"", danhTich:m.danh_tich||"", trangPhuc:m.trang_phuc||"", lanCuoiThay:m.lan_cuoi_thay||"", thoiGian:m.thoi_gian||"", img:photoUrl(m.photo_path) })));
       } catch {}
     };
     load();
@@ -1212,8 +1349,17 @@ export default function App() {
     return { ok:true, matches: data?.matches || [] };
   };
   const addMissing = async m => {
-    try { const { error } = await supabase.from("missing_persons").insert([{ type:m.type, ho_ten:m.hoTen||"", tuoi:m.tuoi||"", gioi_tinh:m.gioiTinh||"", danh_tich:m.danhTich||"", trang_phuc:m.trangPhuc||"", lan_cuoi_thay:m.lanCuoiThay||"", thoi_gian:m.thoiGian||"", contact:m.contact, reward:m.reward||"", urgency:m.urgency||"medium", avatar:m.avatar||"👤", date:m.date }]); if (error) throw error; } catch (e) { console.error("Lỗi lưu tin vào Supabase:", e); alert("Không lưu được tin lên máy chủ. Vui lòng thử lại sau."); return; }
-    setMissing(prev=>[m,...prev]);
+    // Lưu tin + dò người khớp (khuôn mặt / họ tên) ngay trong database (hàm post_missing)
+    const { data, error } = await supabase.rpc("post_missing", { p: {
+      type:m.type, ho_ten:m.hoTen||"", tuoi:m.tuoi||"", gioi_tinh:m.gioiTinh||"", danh_tich:m.danhTich||"",
+      trang_phuc:m.trangPhuc||"", lan_cuoi_thay:m.lanCuoiThay||"", thoi_gian:m.thoiGian||"",
+      contact:m.contact, reward:m.reward||"", urgency:m.urgency||"medium", avatar:m.avatar||"👤", date:m.date,
+      face:m.face||null, photo_path:m.photoPath||null, photo_public:!!m.photoPublic } });
+    if (error) { console.error("Lỗi lưu tin vào Supabase:", error); return { ok:false, error:"Không lưu được tin: " + (error.message || "lỗi máy chủ") }; }
+    const shown = { ...m, id: data?.id ?? m.id, img: photoUrl(m.photoPath) };
+    delete shown.face; delete shown.photoPath; delete shown.photoPublic;   // không giữ vector khuôn mặt trong bộ nhớ trang
+    setMissing(prev=>[shown, ...prev]);
+    return { ok:true, matches: data?.matches || [] };
   };
 
   if (adminMode) return <AdminPanel onExit={() => { window.location.hash = ""; }} />;
