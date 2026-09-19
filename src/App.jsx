@@ -49,10 +49,28 @@ const uid = () => Date.now() + Math.random();
 const ITEM_CAT = ["CMND/CCCD","Bằng lái xe","Hộ chiếu","Ví/Túi xách","Chìa khóa","Điện thoại","Khác"];
 const catIcon = c => ({ "CMND/CCCD":"🪪","Bằng lái xe":"🪪","Hộ chiếu":"📘","Ví/Túi xách":"👛","Chìa khóa":"🔑","Điện thoại":"📱","Khác":"📦" }[c]||"📦");
 const SENSITIVE_CATS = ["CMND/CCCD","Bằng lái xe","Hộ chiếu"];
-const isSensitive = item => SENSITIVE_CATS.includes(item.category);
+// Chuẩn hóa loại giấy tờ (AI có thể trả "CCCD", "Căn cước công dân", "GPLX"...) về đúng danh mục
+const normalizeCategory = (raw) => {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const l = s.toLowerCase();
+  if (/cccd|cmnd|cmt|căn cước|can cuoc|chứng minh|chung minh/.test(l)) return "CMND/CCCD";
+  if (/bằng lái|bang lai|gplx|giấy phép lái|giay phep lai/.test(l)) return "Bằng lái xe";
+  if (/hộ chiếu|ho chieu|passport/.test(l)) return "Hộ chiếu";
+  return s;
+};
+// Loại giấy tờ từ AI -> danh mục có trong ITEM_CAT (không khớp thì đưa vào "Khác")
+const docCategory = (raw) => {
+  const c = normalizeCategory(raw);
+  return ITEM_CAT.includes(c) ? c : "Khác";
+};
+// Tin nhạy cảm nếu thuộc loại giấy tờ HOẶC có số giấy tờ (bắt cả tin cũ bị sai loại)
+const isSensitive = item =>
+  SENSITIVE_CATS.includes(normalizeCategory(item.category)) ||
+  !!(item.soGiayTo && String(item.soGiayTo).trim());
 const privateTitle = item => {
   if (!isSensitive(item)) return item.title;
-  return `${item.category} — ${item.type==="found"?"Đã nhặt được":"Đang tìm"}`;
+  return `${normalizeCategory(item.category) || "Giấy tờ"} — ${item.type==="found"?"Đã nhặt được":"Đang tìm"}`;
 };
 
 // Che thông tin nhạy cảm — chỉ hiện khi xác minh
@@ -366,6 +384,31 @@ Trả JSON THUẦN không markdown: {"moTa":{"gioiTinh":"","doTuoi":"","dacDiem"
   );
 }
 
+// ─── Kết quả dò tin trùng khớp sau khi đăng ──────────────────────────────────
+function MatchResult({ matches, onClose }) {
+  return (
+    <div>
+      <div style={{ textAlign:"center", marginBottom:16 }}>
+        <div style={{ fontSize:48, marginBottom:8 }}>🔔</div>
+        <div style={{ fontWeight:900, fontSize:20, marginBottom:6 }}>Tin đã đăng — có {matches.length} tin có thể khớp!</div>
+        <div style={{ fontSize:13, color:C.text3, lineHeight:1.5 }}>Hãy gọi điện để xác minh. Giấy tờ chỉ nên trao khi đối chiếu đúng thông tin.</div>
+      </div>
+      {matches.map(m => (
+        <div key={m.id} style={{ background:C.bg3, border:`1.5px solid ${m.score>=90?C.gold:C.border2}`, borderRadius:14, padding:"12px 14px", marginBottom:10 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:6, flexWrap:"wrap" }}>
+            <span style={{ fontWeight:800, fontSize:13, color:m.score>=90?C.gold:C.teal }}>{m.reason}</span>
+            <span style={{ fontSize:11, color:C.text3 }}>{m.type==="found" ? "Người khác đã nhặt được" : "Người khác đang tìm"}</span>
+          </div>
+          <div style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>{catIcon(m.category)} {m.title || m.category}</div>
+          <div style={{ fontSize:12, color:C.text3, marginBottom:8 }}>📍 {m.location} · 📅 {m.date}</div>
+          <a href={`tel:${String(m.contact||"").replace(/[^\d+]/g,"")}`} style={{ display:"block", textAlign:"center", background:`linear-gradient(135deg,${C.accent},${C.accentDark})`, borderRadius:10, padding:"10px", color:"#fff", fontWeight:800, fontSize:14, textDecoration:"none" }}>📞 Gọi {m.contact}</a>
+        </div>
+      ))}
+      <button onClick={onClose} style={{ ...S.btn(C.bg3, C.text2), marginTop:6 }}>Đóng</button>
+    </div>
+  );
+}
+
 // ─── Post Item Modal ──────────────────────────────────────────────────────────
 const emptyItem = { title:"", category:"CMND/CCCD", hoTen:"", soGiayTo:"", ngaySinh:"", gioiTinh:"", queQuan:"", diaChiThuongTru:"", location:"", contact:"", reward:"", note:"" };
 function PostItemModal({ onClose, onAdd }) {
@@ -374,20 +417,28 @@ function PostItemModal({ onClose, onAdd }) {
   const [done, setDone] = useState(false);
   const [showScan, setShowScan] = useState(false);
   const [docPrev, setDocPrev] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [matches, setMatches] = useState(null);
   const set = k => v => setForm(f=>({...f,[k]:v}));
   const isDoc = ["CMND/CCCD","Bằng lái xe","Hộ chiếu"].includes(form.category);
   const onFill = (r, prev) => {
     setDocPrev(prev);
-    setForm(f=>({ ...f, category:r.loaiGiayTo||f.category, hoTen:r.hoTen||f.hoTen, soGiayTo:r.soGiayTo||f.soGiayTo, ngaySinh:r.ngaySinh||f.ngaySinh, gioiTinh:r.gioiTinh||f.gioiTinh, queQuan:r.queQuan||f.queQuan, diaChiThuongTru:r.diaChiThuongTru||f.diaChiThuongTru, title:r.hoTen?`${r.loaiGiayTo||"Giấy tờ"} mang tên ${r.hoTen}`:f.title, note:r.moTaThem||f.note }));
+    setForm(f=>({ ...f, category:r.loaiGiayTo ? docCategory(r.loaiGiayTo) : f.category, hoTen:r.hoTen||f.hoTen, soGiayTo:r.soGiayTo||f.soGiayTo, ngaySinh:r.ngaySinh||f.ngaySinh, gioiTinh:r.gioiTinh||f.gioiTinh, queQuan:r.queQuan||f.queQuan, diaChiThuongTru:r.diaChiThuongTru||f.diaChiThuongTru, title:r.hoTen?`${r.loaiGiayTo||"Giấy tờ"} mang tên ${r.hoTen}`:f.title, note:r.moTaThem||f.note }));
   };
-  const submit = () => {
-    if (!form.title || !form.location || !form.contact) return;
-    onAdd({ id:uid(), type:ptype, ...form, img:catIcon(form.category), date:fmtDate() });
-    setDone(true); setTimeout(onClose, 1800);
+  const submit = async () => {
+    if (busy || !form.title || !form.location || !form.contact) return;
+    setBusy(true); setErr("");
+    const res = await onAdd({ id:uid(), type:ptype, ...form, img:catIcon(form.category), date:fmtDate() });
+    setBusy(false);
+    if (!res?.ok) { setErr("Không lưu được tin (kiểm tra số điện thoại hoặc thử lại sau)."); return; }
+    setDone(true);
+    if (res.matches?.length) setMatches(res.matches);
+    else setTimeout(onClose, 1800);
   };
   return (<>
     <Modal onClose={onClose} style={{ maxHeight:"92vh", overflowY:"auto" }}>
-      {done ? <div style={{ textAlign:"center", padding:"50px 0" }}><div style={{ fontSize:60, marginBottom:16 }}>🎉</div><div style={{ fontWeight:900, fontSize:22, marginBottom:8 }}>Đăng tin thành công!</div></div> : <>
+      {done && matches?.length ? <MatchResult matches={matches} onClose={onClose}/> : done ? <div style={{ textAlign:"center", padding:"50px 0" }}><div style={{ fontSize:60, marginBottom:16 }}>🎉</div><div style={{ fontWeight:900, fontSize:22, marginBottom:8 }}>Đăng tin thành công!</div></div> : <>
         <div style={{ fontWeight:900, fontSize:20, marginBottom:20 }}>📝 Đăng tin đồ vật</div>
         <div style={{ display:"flex", gap:4, background:C.bg, borderRadius:12, padding:4, marginBottom:20 }}>
           {[["found","🟢 Tôi nhặt được"],["lost","🔴 Tôi bị mất"]].map(([v,l])=>(
@@ -421,7 +472,8 @@ function PostItemModal({ onClose, onAdd }) {
         <Field label="Số điện thoại liên hệ" value={form.contact} onChange={set("contact")} placeholder="0901 234 567" type="tel" required/>
         {ptype==="lost" && <Field label="Tiền thưởng (nếu có)" value={form.reward} onChange={set("reward")} placeholder="VD: 200.000đ"/>}
         <Field label="Ghi chú thêm" value={form.note} onChange={set("note")} placeholder="Đặc điểm nhận dạng thêm…" multiline/>
-        <button onClick={submit} style={S.btn(`linear-gradient(135deg,${ptype==="found"?C.teal:C.accent},${ptype==="found"?C.tealDark:C.accentDark})`)}>Đăng tin ngay →</button>
+        {err && <div style={{ background:"rgba(255,79,123,0.12)", border:`1px solid ${C.rose}`, borderRadius:10, padding:"9px 12px", fontSize:13, color:C.rose, marginBottom:12 }}>{err}</div>}
+        <button onClick={submit} disabled={busy} style={{ ...S.btn(`linear-gradient(135deg,${ptype==="found"?C.teal:C.accent},${ptype==="found"?C.tealDark:C.accentDark})`), opacity:busy?0.6:1 }}>{busy ? "Đang đăng…" : "Đăng tin ngay →"}</button>
       </>}
     </Modal>
     {showScan && <DocScanModal onClose={()=>setShowScan(false)} onFill={onFill}/>}
@@ -913,6 +965,189 @@ function MapModal({ onClose }) {
   );
 }
 
+// ─── Trang quản trị (mở bằng timdovn.vn/#admin) ───────────────────────────────
+const digitsOnly = v => String(v||"").replace(/\D/g,"");
+const dupKey = i => `${i.type}|${String(i.so_giay_to||"").replace(/\W/g,"").toUpperCase() || String(i.title||"").trim().toLowerCase()}|${digitsOnly(i.contact)}`;
+const btnSm = (color) => ({ background:"transparent", border:`1.5px solid ${color}`, borderRadius:8, padding:"6px 12px", color, fontWeight:700, fontSize:12, cursor:"pointer" });
+const badge = (color) => ({ display:"inline-block", fontSize:11, fontWeight:800, color, border:`1px solid ${color}`, borderRadius:6, padding:"1px 7px", marginRight:6 });
+
+function AdminPanel({ onExit }) {
+  const [session, setSession] = useState(undefined);   // undefined = đang kiểm tra đăng nhập
+  const [isAdmin, setIsAdmin] = useState(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginErr, setLoginErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState("items");
+  const [items, setAdminItems] = useState([]);
+  const [persons, setPersons] = useState([]);
+  const [q, setQ] = useState("");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s || null));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!session) { setIsAdmin(null); return; }
+    supabase.rpc("is_admin").then(({ data, error }) => setIsAdmin(!error && data === true));
+  }, [session]);
+
+  const loadAll = useCallback(async () => {
+    setMsg("");
+    const a = await supabase.from("items").select("*").order("created_at", { ascending:false }).limit(500);
+    const b = await supabase.from("missing_persons").select("*").order("created_at", { ascending:false }).limit(500);
+    if (a.error || b.error) setMsg("Không tải được dữ liệu: " + (a.error?.message || b.error?.message));
+    setAdminItems(a.data || []); setPersons(b.data || []);
+  }, []);
+  useEffect(() => { if (isAdmin) loadAll(); }, [isAdmin, loadAll]);
+
+  const login = async e => {
+    e.preventDefault(); setBusy(true); setLoginErr("");
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    setBusy(false); setPassword("");
+    if (error) setLoginErr("Sai email hoặc mật khẩu.");
+  };
+
+  const removeRow = async (table, row, label) => {
+    if (!window.confirm("Xóa VĨNH VIỄN tin này?\n\n" + label)) return;
+    const { data, error } = await supabase.from(table).delete().eq("id", row.id).select();
+    if (error || !data?.length) { setMsg("Không xóa được: " + (error?.message || "không có quyền hoặc tin không còn tồn tại")); return; }
+    if (table === "items") setAdminItems(p => p.filter(x => x.id !== row.id));
+    else setPersons(p => p.filter(x => x.id !== row.id));
+    setMsg("Đã xóa.");
+  };
+
+  const toggleResolved = async row => {
+    const next = row.status === "resolved" ? "open" : "resolved";
+    const { data, error } = await supabase.from("items")
+      .update({ status: next, resolved_at: next === "resolved" ? new Date().toISOString() : null })
+      .eq("id", row.id).select();
+    if (error || !data?.length) { setMsg("Không cập nhật được: " + (error?.message || "không có quyền")); return; }
+    setAdminItems(p => p.map(x => x.id === row.id ? { ...x, status: next } : x));
+    setMsg(next === "resolved" ? "Đã đánh dấu đã trả (tin ẩn khỏi trang công khai, không bị tự xóa)." : "Đã mở lại tin.");
+  };
+
+  const needle = q.trim().toLowerCase();
+  const hit = row => !needle || Object.values(row).some(v => typeof v === "string" && v.toLowerCase().includes(needle));
+  const dupCount = {}; const phoneCount = {};
+  items.forEach(i => { const k = dupKey(i); dupCount[k] = (dupCount[k] || 0) + 1; const ph = digitsOnly(i.contact); phoneCount[ph] = (phoneCount[ph] || 0) + 1; });
+  const shownItems = items.filter(hit);
+  const shownPersons = persons.filter(hit);
+
+  const wrap = { minHeight:"100vh", background:C.bg, color:C.text, fontFamily:"'Segoe UI',system-ui,sans-serif", padding:"20px 16px" };
+  const inner = { maxWidth:900, margin:"0 auto" };
+  const card = { background:C.bg2, border:`1.5px solid ${C.border}`, borderRadius:14, padding:"14px 16px", marginBottom:10 };
+
+  if (session === undefined) return <div style={wrap}><div style={inner}>Đang kiểm tra đăng nhập…</div></div>;
+
+  if (!session) return (
+    <div style={wrap}><div style={{ ...inner, maxWidth:400 }}>
+      <div style={{ ...S.box, marginTop:40 }}>
+        <div style={{ fontWeight:900, fontSize:20, marginBottom:4 }}>🛡️ Quản trị TìmĐồ.vn</div>
+        <div style={{ fontSize:13, color:C.text3, marginBottom:18 }}>Chỉ dành cho quản trị viên.</div>
+        <form onSubmit={login}>
+          <Field label="Email" value={email} onChange={setEmail} type="email" placeholder="email@quantri.com" required/>
+          <Field label="Mật khẩu" value={password} onChange={setPassword} type="password" required/>
+          {loginErr && <div style={{ color:C.rose, fontSize:13, marginBottom:12 }}>{loginErr}</div>}
+          <button type="submit" disabled={busy} style={{ ...S.btn(`linear-gradient(135deg,${C.accent},${C.accentDark})`), opacity:busy?0.6:1 }}>{busy ? "Đang đăng nhập…" : "Đăng nhập"}</button>
+        </form>
+        <button onClick={onExit} style={{ ...btnSm(C.text3), marginTop:14 }}>← Về trang chủ</button>
+      </div>
+    </div></div>
+  );
+
+  if (isAdmin === null) return <div style={wrap}><div style={inner}>Đang kiểm tra quyền…</div></div>;
+
+  if (!isAdmin) return (
+    <div style={wrap}><div style={{ ...inner, maxWidth:460 }}>
+      <div style={{ ...S.box, marginTop:40 }}>
+        <div style={{ fontWeight:900, fontSize:18, marginBottom:8 }}>Tài khoản chưa có quyền admin</div>
+        <div style={{ fontSize:13, color:C.text3, marginBottom:16 }}>{session.user?.email} chưa nằm trong danh sách quản trị viên.</div>
+        <button onClick={() => supabase.auth.signOut()} style={S.btn(C.bg3, C.text2)}>Đăng xuất</button>
+      </div>
+    </div></div>
+  );
+
+  return (
+    <div style={wrap}><div style={inner}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
+        <div>
+          <div style={{ fontWeight:900, fontSize:20 }}>🛡️ Quản trị TìmĐồ.vn</div>
+          <div style={{ fontSize:12, color:C.text3 }}>{session.user?.email}</div>
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={loadAll} style={btnSm(C.teal)}>↻ Tải lại</button>
+          <button onClick={onExit} style={btnSm(C.text2)}>Trang chủ</button>
+          <button onClick={() => supabase.auth.signOut()} style={btnSm(C.rose)}>Đăng xuất</button>
+        </div>
+      </div>
+
+      <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+        {[["items", `Đồ vật (${items.length})`], ["missing", `Người mất tích (${persons.length})`]].map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} style={{ ...btnSm(tab === k ? C.accent : C.text3), background: tab === k ? "rgba(39,174,96,0.15)" : "transparent" }}>{l}</button>
+        ))}
+      </div>
+      <input value={q} onChange={e => setQ(e.target.value)} placeholder="Tìm theo tên, số giấy tờ, SĐT, địa điểm, nội dung…" style={{ ...S.input, marginBottom:12 }}/>
+      {msg && <div style={{ ...card, borderColor:C.gold, color:C.gold, fontSize:13 }}>{msg}</div>}
+
+      {tab === "items" && <>
+        <div style={{ fontSize:12, color:C.text3, marginBottom:8 }}>Hiển thị {Math.min(shownItems.length, 200)}/{shownItems.length} tin. ⚠ = nghi trùng lặp hoặc spam. Xóa là vĩnh viễn.</div>
+        {shownItems.slice(0, 200).map(row => {
+          const dup = dupCount[dupKey(row)] > 1;
+          const spam = phoneCount[digitsOnly(row.contact)] >= 5;
+          const label = `${row.category} — ${row.title || ""}`;
+          return (
+            <div key={row.id} style={{ ...card, opacity: row.status === "resolved" ? 0.6 : 1 }}>
+              <div style={{ marginBottom:6 }}>
+                <span style={badge(row.type === "found" ? C.teal : C.rose)}>{row.type === "found" ? "ĐÃ NHẶT" : "ĐANG TÌM"}</span>
+                <span style={badge(C.text3)}>{row.category}</span>
+                {row.status === "resolved" && <span style={badge(C.accent)}>ĐÃ TRẢ</span>}
+                {dup && <span style={badge(C.gold)}>⚠ Nghi trùng lặp</span>}
+                {spam && <span style={badge(C.gold)}>⚠ SĐT đăng {phoneCount[digitsOnly(row.contact)]} tin</span>}
+              </div>
+              <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>{row.title}</div>
+              <div style={{ fontSize:12, color:C.text2, lineHeight:1.7 }}>
+                {row.ho_ten && <div>👤 {row.ho_ten}{row.so_giay_to ? ` · ${row.so_giay_to}` : ""}{row.ngay_sinh ? ` · ${row.ngay_sinh}` : ""}</div>}
+                <div>📍 {row.location} · 📞 {row.contact} · 📅 {row.date} {row.reward ? `· 🏆 ${row.reward}` : ""}</div>
+                {row.note && <div>📝 {row.note}</div>}
+                <div style={{ color:C.text3 }}>Đăng lúc {row.created_at ? new Date(row.created_at).toLocaleString("vi-VN") : "?"}</div>
+              </div>
+              <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                <button onClick={() => toggleResolved(row)} style={btnSm(C.accent)}>{row.status === "resolved" ? "↩ Mở lại" : "✅ Đã trả"}</button>
+                <button onClick={() => removeRow("items", row, label)} style={btnSm(C.rose)}>🗑 Xóa</button>
+              </div>
+            </div>
+          );
+        })}
+      </>}
+
+      {tab === "missing" && <>
+        <div style={{ fontSize:12, color:C.text3, marginBottom:8 }}>Hiển thị {Math.min(shownPersons.length, 200)}/{shownPersons.length} tin. Xóa là vĩnh viễn.</div>
+        {shownPersons.slice(0, 200).map(row => (
+          <div key={row.id} style={card}>
+            <div style={{ marginBottom:6 }}>
+              <span style={badge(C.rose)}>{row.type === "missing" ? "MẤT TÍCH" : row.type === "found" ? "TÌM THẤY" : String(row.type || "").toUpperCase()}</span>
+              {row.urgency === "high" && <span style={badge(C.gold)}>KHẨN</span>}
+            </div>
+            <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>{row.ho_ten} {row.tuoi ? `· ${row.tuoi}` : ""} {row.gioi_tinh ? `· ${row.gioi_tinh}` : ""}</div>
+            <div style={{ fontSize:12, color:C.text2, lineHeight:1.7 }}>
+              {row.danh_tich && <div>🔎 {row.danh_tich}</div>}
+              {row.lan_cuoi_thay && <div>📍 {row.lan_cuoi_thay} {row.thoi_gian ? `· ${row.thoi_gian}` : ""}</div>}
+              <div>📞 {row.contact} · 📅 {row.date}</div>
+            </div>
+            <div style={{ display:"flex", gap:8, marginTop:10 }}>
+              <button onClick={() => removeRow("missing_persons", row, row.ho_ten || "")} style={btnSm(C.rose)}>🗑 Xóa</button>
+            </div>
+          </div>
+        ))}
+      </>}
+    </div></div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [items, setItems] = useState(INIT_ITEMS);
@@ -929,14 +1164,20 @@ export default function App() {
   const [faceSearch, setFaceSearch] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [adminMode, setAdminMode] = useState(() => typeof window !== "undefined" && window.location.hash === "#admin");
+  useEffect(() => {
+    const onHash = () => setAdminMode(window.location.hash === "#admin");
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   // Load dữ liệu từ Supabase
   useEffect(() => {
     const load = async () => {
       try {
-        const { data: d1 } = await supabase.from("items").select("*").order("created_at", { ascending: false });
+        const { data: d1 } = await supabase.from("items_public").select("*").order("created_at", { ascending: false });
         const { data: d2 } = await supabase.from("missing_persons").select("*").order("created_at", { ascending: false });
-        if (d1?.length > 0) setItems(d1.map(i => ({ ...i, hoTen:i.ho_ten, soGiayTo:i.so_giay_to, ngaySinh:i.ngay_sinh })));
+        if (d1?.length > 0) setItems(d1.map(i => ({ ...i, category:normalizeCategory(i.category), hoTen:i.ho_ten, soGiayTo:i.so_giay_to, ngaySinh:i.ngay_sinh })));
         if (d2?.length > 0) setMissing(d2.map(m => ({ ...m, hoTen:m.ho_ten, gioiTinh:m.gioi_tinh, danhTich:m.danh_tich, trangPhuc:m.trang_phuc, lanCuoiThay:m.lan_cuoi_thay, thoiGian:m.thoi_gian })));
       } catch {}
     };
@@ -960,13 +1201,22 @@ export default function App() {
   });
 
   const addItem = async item => {
-    try { await supabase.from("items").insert([{ type:item.type, category:item.category, title:item.title, ho_ten:item.hoTen||"", so_giay_to:item.soGiayTo||"", ngay_sinh:item.ngaySinh||"", location:item.location, contact:item.contact, reward:item.reward||"", note:item.note||"", img:item.img, date:item.date }]); } catch {}
-    setItems(prev=>[item,...prev]);
+    // Lưu tin + dò tin trùng khớp ngay trong database (hàm post_item trong Supabase)
+    const { data, error } = await supabase.rpc("post_item", { p: {
+      type:item.type, category:item.category, title:item.title,
+      ho_ten:item.hoTen||"", so_giay_to:item.soGiayTo||"", ngay_sinh:item.ngaySinh||"",
+      location:item.location, contact:item.contact, reward:item.reward||"",
+      note:item.note||"", img:item.img, date:item.date } });
+    if (error) { console.error("Lỗi lưu tin vào Supabase:", error); return { ok:false }; }
+    setItems(prev=>[{ ...item, id: data?.id ?? item.id }, ...prev]);
+    return { ok:true, matches: data?.matches || [] };
   };
   const addMissing = async m => {
-    try { await supabase.from("missing_persons").insert([{ type:m.type, ho_ten:m.hoTen||"", tuoi:m.tuoi||"", gioi_tinh:m.gioiTinh||"", danh_tich:m.danhTich||"", trang_phuc:m.trangPhuc||"", lan_cuoi_thay:m.lanCuoiThay||"", thoi_gian:m.thoiGian||"", contact:m.contact, reward:m.reward||"", urgency:m.urgency||"medium", avatar:m.avatar||"👤", date:m.date }]); } catch {}
+    try { const { error } = await supabase.from("missing_persons").insert([{ type:m.type, ho_ten:m.hoTen||"", tuoi:m.tuoi||"", gioi_tinh:m.gioiTinh||"", danh_tich:m.danhTich||"", trang_phuc:m.trangPhuc||"", lan_cuoi_thay:m.lanCuoiThay||"", thoi_gian:m.thoiGian||"", contact:m.contact, reward:m.reward||"", urgency:m.urgency||"medium", avatar:m.avatar||"👤", date:m.date }]); if (error) throw error; } catch (e) { console.error("Lỗi lưu tin vào Supabase:", e); alert("Không lưu được tin lên máy chủ. Vui lòng thử lại sau."); return; }
     setMissing(prev=>[m,...prev]);
   };
+
+  if (adminMode) return <AdminPanel onExit={() => { window.location.hash = ""; }} />;
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Segoe UI',system-ui,sans-serif", color:C.text }}>
