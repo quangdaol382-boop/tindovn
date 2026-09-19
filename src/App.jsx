@@ -169,9 +169,24 @@ function Empty({ icon, text }) {
 // Vercel tự động làm proxy an toàn, không lộ API key
 const AI_PROXY = "/api/ai";
 
+// Ảnh chụp từ điện thoại thường 3-8MB; máy chủ Vercel chỉ nhận yêu cầu dưới ~4MB (lỗi 413).
+// Vì vậy thu nhỏ ảnh về tối đa 1600 điểm ảnh/JPEG trước khi gửi cho AI (chữ trên giấy tờ vẫn đọc rõ).
+async function shrinkB64(b64, mime) {
+  if (!b64 || b64.length < 900000) return { b64, mime };   // ảnh đã nhỏ (< ~650KB) thì gửi nguyên
+  try {
+    const src = `data:${mime || "image/jpeg"};base64,${b64}`;
+    for (const [side, q] of [[1600, 0.85], [1400, 0.75], [1100, 0.7]]) {
+      const out = (await compressToDataUrl(src, side, q)).split(",")[1];
+      if (out.length < 2500000 || side === 1100) return { b64: out, mime: "image/jpeg" };
+    }
+  } catch (e) { console.error("Không thu nhỏ được ảnh:", e); }
+  return { b64, mime };
+}
+
 async function callGemini(prompt, b64Image = null, mimeType = "image/jpeg") {
   const content = [];
   if (b64Image) {
+    ({ b64: b64Image, mime: mimeType } = await shrinkB64(b64Image, mimeType));
     // Tự detect mime type từ base64 header
     let detectedMime = mimeType;
     if (b64Image.startsWith("/9j/")) detectedMime = "image/jpeg";
