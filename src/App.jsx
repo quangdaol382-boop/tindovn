@@ -1406,13 +1406,6 @@ export default function App() {
               <div style={{ fontWeight:900, fontSize:19, letterSpacing:-0.5, lineHeight:1 }}>TìmĐồ<span style={{ color:C.heroAccent }}>.vn</span></div>
               <div style={{ fontSize:9, color:C.text3, letterSpacing:1.5, textTransform:"uppercase" }}>Đồ vật · Người thân · AI</div>
             </div>
-            <div style={{ display:"flex", alignItems:"center", gap:6, marginLeft:8, padding:"4px 10px", background:"rgba(255,255,255,0.08)", borderRadius:8, border:`1px solid ${C.border}` }}>
-              <span style={{ fontSize:16 }}>🚔</span>
-              <div style={{ fontSize:9, color:C.text3, lineHeight:1.3 }}>
-                <div style={{ fontWeight:700, color:"#E0F2FE", fontSize:10 }}>CÔNG AN</div>
-                <div>NHÂN DÂN</div>
-              </div>
-            </div>
           </div>
           <div style={{ display:"flex", gap:8, alignItems:"center" }}>
             <button onClick={()=>setShowMap(true)} style={{ background:"#1A1A1A", border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 12px", color:C.text3, fontSize:16, cursor:"pointer" }}>🗺️</button>
