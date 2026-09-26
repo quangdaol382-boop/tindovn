@@ -1397,16 +1397,6 @@ export default function App() {
         input { color: #FFFFFF; }
       `}</style>
 
-      {/* GOV STRIP - đặt logo/tên đơn vị Công an chính thức khi có ảnh huy hiệu.
-          Thay src bên dưới bằng "/cong-an-emblem.png" (đặt file ảnh vào thư mục public/) */}
-      <div style={{ background:C.accentDark, textAlign:"center", padding:"6px 12px 8px" }}>
-        <div style={{ display:"inline-flex", flexDirection:"column", alignItems:"center", gap:2 }}>
-          <div style={{ width:42, height:42, borderRadius:"50%", border:`2px dashed ${C.heroAccent}88`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, marginBottom:2 }} title="Vị trí huy hiệu Công an Nhân dân — thay bằng ảnh chính thức">🛡️</div>
-          <div style={{ fontFamily:`"Times New Roman", Times, serif`, color:C.heroAccent, fontWeight:700, fontSize:12, lineHeight:1.35, letterSpacing:0.3 }}>CÔNG AN THÀNH PHỐ HỒ CHÍ MINH</div>
-          <div style={{ fontFamily:`"Times New Roman", Times, serif`, color:C.heroAccent, fontWeight:700, fontSize:12, lineHeight:1.35, letterSpacing:0.3 }}>CÔNG AN PHƯỜNG THỚI AN</div>
-        </div>
-      </div>
-
       {/* HEADER */}
       <header style={{ background:C.accentDark, padding:"0 22px", position:"sticky", top:0, zIndex:200, boxShadow:"0 2px 10px rgba(0,0,0,0.15)" }}>
         <div style={{ maxWidth:1040, margin:"0 auto", display:"flex", alignItems:"center", justifyContent:"space-between", height:62 }}>
