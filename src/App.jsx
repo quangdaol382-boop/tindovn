@@ -333,6 +333,69 @@ const FACE_LEVELS = {
   trung_ten: { label:"Trùng họ tên", color:C.text3 },
 };
 
+function PrivacyModal({ onClose }) {
+  const Sec = ({ title, children }) => (
+    <div style={{ marginBottom:20 }}>
+      <div style={{ fontWeight:800, fontSize:14, color:C.heroAccent, marginBottom:8 }}>{title}</div>
+      <div style={{ fontSize:13, color:C.text2, lineHeight:1.75 }}>{children}</div>
+    </div>
+  );
+  return (
+    <Modal onClose={onClose} style={{ maxWidth:680, maxHeight:"88vh", overflowY:"auto" }}>
+      <div style={{ fontWeight:900, fontSize:20, marginBottom:4 }}>🔒 Chính sách quyền riêng tư</div>
+      <div style={{ fontSize:12, color:C.text3, marginBottom:20 }}>Cập nhật lần cuối: 28/09/2026 · Áp dụng theo Luật Bảo vệ dữ liệu cá nhân (hiệu lực từ 01/01/2026)</div>
+
+      <Sec title="1. TìmĐồ.vn là gì">
+        TìmĐồ.vn là một dự án cộng đồng, hiện do một cá nhân xây dựng và vận hành (chưa phải pháp nhân/doanh nghiệp), giúp kết nối người thất lạc đồ vật / người thân với người có thể đã nhặt được / gặp được. Vì đang trong giai đoạn thử nghiệm, chính sách này có thể được cập nhật khi hệ thống hoàn thiện thêm.
+      </Sec>
+
+      <Sec title="2. Thông tin chúng tôi thu thập">
+        <strong>Khi đăng tin đồ vật:</strong> tên/mô tả đồ vật, loại đồ vật, địa điểm, số điện thoại liên hệ, tiền thưởng (nếu có), ghi chú. Nếu là giấy tờ tùy thân (CCCD/CMND, bằng lái, hộ chiếu), có thể thêm họ tên, số giấy tờ, ngày sinh, quê quán, địa chỉ thường trú.<br/><br/>
+        <strong>Khi đăng tin người mất tích:</strong> họ tên, tuổi, giới tính, đặc điểm nhận dạng, trang phục, địa điểm và thời gian lần cuối thấy, số điện thoại liên hệ, tiền thưởng, mức độ khẩn cấp.<br/><br/>
+        <strong>Ảnh và dữ liệu khuôn mặt:</strong> nếu bạn tải ảnh lên để đối chiếu, trình duyệt của bạn tự tính toán một "dãy số đặc trưng khuôn mặt" ngay trên máy bạn (không phải ảnh) để hệ thống so khớp — đây là dữ liệu sinh trắc học. Ảnh gốc chỉ được lưu lại nếu bạn chọn "hiển thị ảnh công khai" khi đăng tin người mất tích.<br/><br/>
+        <strong>Khi dùng tính năng "Quét AI" giấy tờ hoặc "Nhờ AI mô tả":</strong> ảnh bạn chụp được gửi tới dịch vụ AI của Anthropic (Claude, đặt tại Hoa Kỳ) để tự động đọc thông tin hoặc mô tả ngoại hình — đây là việc <strong>chuyển dữ liệu ra nước ngoài</strong>. Ảnh chỉ dùng để xử lý ngay lúc đó, hệ thống của chúng tôi không lưu lại ảnh đã gửi cho AI.<br/><br/>
+        <strong>Dữ liệu kỹ thuật:</strong> địa chỉ IP tại thời điểm đăng tin/tìm kiếm, dùng để ngăn đăng tin hàng loạt hoặc spam.
+      </Sec>
+
+      <Sec title="3. Vì sao chúng tôi thu thập">
+        Chỉ để vận hành đúng chức năng của trang: hiển thị tin cho cộng đồng, tự động dò tin có thể trùng khớp, ngăn chặn spam/lạm dụng. Chúng tôi không thu thập dữ liệu cho mục đích quảng cáo và không bán hay trao đổi dữ liệu của bạn cho bên thứ ba vì mục đích thương mại.
+      </Sec>
+
+      <Sec title="4. Nơi lưu trữ và bên thứ ba liên quan">
+        Dữ liệu được lưu trên hạ tầng của Supabase (cơ sở dữ liệu) và Vercel (máy chủ chạy website) — cả hai đều là dịch vụ hạ tầng đặt ở nước ngoài. Ảnh giấy tờ/mô tả gửi qua tính năng AI được xử lý bởi Anthropic (Hoa Kỳ). Đây là các bên xử lý dữ liệu thay chúng tôi để vận hành dịch vụ, không phải bên nhận dữ liệu vì mục đích riêng của họ.
+      </Sec>
+
+      <Sec title="5. Thời gian lưu trữ">
+        Tin đồ vật tự động bị xóa sau <strong>30 ngày</strong> kể từ ngày đăng nếu chưa được đánh dấu "đã trả". Tin người mất tích <strong>không tự động xóa</strong> do tính chất nhạy cảm; nếu để quá 60 ngày mà chưa giải quyết, hệ thống chỉ nhắc quản trị viên xem xét chứ không tự xóa. Khi một tin người mất tích được đánh dấu "đã tìm thấy", <strong>ảnh và dữ liệu khuôn mặt bị xóa ngay lập tức</strong>, không thể khôi phục. Bạn có thể yêu cầu xóa tin của mình bất cứ lúc nào — xem mục 7.
+      </Sec>
+
+      <Sec title="6. Bảo mật">
+        Dữ liệu được truyền qua kết nối mã hóa (HTTPS) và có phân quyền truy cập ở tầng cơ sở dữ liệu. Với tin đồ vật là giấy tờ tùy thân, số giấy tờ/ngày sinh/địa chỉ chỉ hiển thị một phần công khai — người liên hệ phải xác minh qua điện thoại mới biết đầy đủ. Chúng tôi liên tục bổ sung thêm các lớp bảo vệ. Không có hệ thống nào an toàn tuyệt đối, và đây là dự án đang trong giai đoạn thử nghiệm.
+      </Sec>
+
+      <Sec title="7. Quyền của bạn">
+        Theo Luật Bảo vệ dữ liệu cá nhân, bạn có quyền: được biết dữ liệu của mình được xử lý ra sao; đồng ý hoặc rút lại đồng ý; truy cập, yêu cầu chỉnh sửa thông tin sai; <strong>yêu cầu xóa hoặc hạn chế xử lý dữ liệu của mình</strong>; phản đối việc xử lý; và khiếu nại nếu cho rằng quyền của mình bị vi phạm. Để thực hiện bất kỳ quyền nào ở trên, hãy liên hệ <strong>help@timdovn.vn</strong> — chúng tôi sẽ xử lý trong thời gian sớm nhất.
+      </Sec>
+
+      <Sec title="8. Trẻ em và người không tự quyết định được">
+        Với tin người mất tích liên quan đến trẻ em, người cao tuổi lẫn, hoặc người không tự đồng ý được, người đăng tin (thường là người thân/người giám hộ) chịu trách nhiệm về việc cung cấp thông tin này là hợp pháp và cần thiết.
+      </Sec>
+
+      <Sec title="9. Cookie">
+        Trang không dùng cookie theo dõi cho mục đích quảng cáo. Chỉ lưu trạng thái đăng nhập của quản trị viên trên trình duyệt để duy trì phiên làm việc.
+      </Sec>
+
+      <Sec title="10. Thay đổi chính sách">
+        Chính sách này có thể được cập nhật khi hệ thống thay đổi. Ngày cập nhật gần nhất luôn hiển thị ở đầu trang này.
+      </Sec>
+
+      <Sec title="11. Liên hệ">
+        📧 help@timdovn.vn · 📞 Hotline: 1800 9999
+      </Sec>
+    </Modal>
+  );
+}
+
 function PersonMatchCard({ m }) {
   const lv = FACE_LEVELS[m.level] || FACE_LEVELS.co_the;
   const url = photoUrl(m.photo_path);
@@ -1327,6 +1390,7 @@ export default function App() {
   const [faceSearch, setFaceSearch] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const [adminMode, setAdminMode] = useState(() => typeof window !== "undefined" && window.location.hash === "#admin");
   useEffect(() => {
     const onHash = () => setAdminMode(window.location.hash === "#admin");
@@ -1546,7 +1610,7 @@ export default function App() {
             </div>
           </div>
           <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:16, display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
-            <div style={{ fontSize:12, color:"#333" }}>© 2026 TìmĐồ.vn · Bảo mật thông tin · Điều khoản sử dụng</div>
+            <div style={{ fontSize:12, color:"#333" }}>© 2026 TìmĐồ.vn · <span onClick={()=>setShowPrivacy(true)} style={{ textDecoration:"underline", cursor:"pointer" }}>Chính sách quyền riêng tư</span></div>
             <div style={{ display:"flex", gap:8 }}>
               {["🚨 Khẩn cấp 113","🏥 Cấp cứu 115","👮 Công an 114"].map(t=>(
                 <div key={t} style={{ background:"#1A1A1A", border:`1px solid ${C.border}`, borderRadius:8, padding:"5px 10px", fontSize:11, color:C.text3 }}>{t}</div>
@@ -1565,6 +1629,7 @@ export default function App() {
 
       {showNotif && <NotifPanel onClose={()=>setShowNotif(false)} user={null}/>}
       {showMap && <MapModal onClose={()=>setShowMap(false)}/>}
+      {showPrivacy && <PrivacyModal onClose={()=>setShowPrivacy(false)}/>}
     </div>
   );
 }
