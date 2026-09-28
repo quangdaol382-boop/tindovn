@@ -333,52 +333,6 @@ const FACE_LEVELS = {
   trung_ten: { label:"Trùng họ tên", color:C.text3 },
 };
 
-// ─── CAPTCHA (Cloudflare Turnstile) ──────────────────────────────────────────
-// Site Key công khai, không cần giữ bí mật (Secret Key nằm ở máy chủ, trong biến môi trường Vercel)
-const TURNSTILE_SITE_KEY = "0x4AAAAAAFGTTI5mCFlqOqFM";
-function useTurnstile() {
-  const [token, setToken] = useState("");
-  const elRef = useRef(null);
-  const widgetId = useRef(null);
-  useEffect(() => {
-    let cancelled = false;
-    const renderWidget = () => {
-      if (cancelled || !elRef.current || !window.turnstile || widgetId.current) return;
-      widgetId.current = window.turnstile.render(elRef.current, {
-        sitekey: TURNSTILE_SITE_KEY,
-        callback: t => setToken(t),
-        "expired-callback": () => setToken(""),
-        "error-callback": () => setToken(""),
-      });
-    };
-    if (window.turnstile) renderWidget();
-    else {
-      let s = document.getElementById("turnstile-script");
-      if (!s) {
-        s = document.createElement("script");
-        s.id = "turnstile-script";
-        s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
-        s.async = true; s.defer = true;
-        document.head.appendChild(s);
-      }
-      s.addEventListener("load", renderWidget);
-      if (window.turnstile) renderWidget();
-    }
-    return () => {
-      cancelled = true;
-      if (widgetId.current && window.turnstile) { try { window.turnstile.remove(widgetId.current); } catch {} }
-    };
-  }, []);
-  const reset = () => {
-    setToken("");
-    if (widgetId.current && window.turnstile) { try { window.turnstile.reset(widgetId.current); } catch {} }
-  };
-  return { elRef, token, reset };
-}
-function CaptchaBox({ elRef }) {
-  return <div style={{ margin:"4px 0 14px", display:"flex", justifyContent:"center" }}><div ref={elRef}/></div>;
-}
-
 function PersonMatchCard({ m }) {
   const lv = FACE_LEVELS[m.level] || FACE_LEVELS.co_the;
   const url = photoUrl(m.photo_path);
@@ -434,7 +388,6 @@ function FaceMatchModal({ onClose, missing }) {
   const [scope, setScope] = useState("");       // "" = tất cả, "missing", "found_person"
   const [results, setResults] = useState(null);
   const token = useRef(0);
-  const { elRef: captchaEl, token: captchaToken, reset: resetCaptcha } = useTurnstile();
   const { pick, inputEl, handleDrop } = useImagePicker(async src => {
     const my = ++token.current;
     setPreview(src); setFace(null); setResults(null); setErr(""); setWarn(""); setPhase("analyzing");
@@ -450,14 +403,10 @@ function FaceMatchModal({ onClose, missing }) {
     }
   });
   const search = async () => {
-    if (!captchaToken) { setErr("Vui lòng xác nhận CAPTCHA (ô bên dưới) trước khi tìm."); return; }
     setPhase("searching"); setErr("");
-    const r = await fetch("/api/search-face", { method:"POST", headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ p_face: face, p_type: scope || null, p_gender: null, captchaToken }) });
-    const j = await r.json().catch(()=>({}));
-    resetCaptcha();
-    if (!r.ok || j.error) { console.error("search_face lỗi:", j.error); setErr(dbMsg({ message:j.error }) || "Không tìm được, vui lòng thử lại sau."); setPhase("ready"); return; }
-    setResults(j.data || []); setPhase("done");
+    const { data, error } = await supabase.rpc("search_face", { p_face: face, p_type: scope || null, p_gender: null });
+    if (error) { console.error("search_face lỗi:", error); setErr(dbMsg(error) || "Không tìm được, vui lòng thử lại sau."); setPhase("ready"); return; }
+    setResults(data || []); setPhase("done");
   };
   const reset = () => { token.current++; setPhase("idle"); setPreview(null); setFace(null); setResults(null); setErr(""); setWarn(""); };
   const total = (missing || []).length;
@@ -501,8 +450,7 @@ function FaceMatchModal({ onClose, missing }) {
         </div>
       ))}
       {phase==="done" && <button onClick={reset} style={{ ...S.btn("#222","#aaa"), width:"auto", padding:"9px 18px", fontSize:13 }}>← Đối chiếu ảnh khác</button>}
-      {(phase==="ready"||phase==="error") && face && <CaptchaBox elRef={captchaEl}/>}
-      {(phase==="ready"||phase==="error") && face && <button onClick={search} disabled={!captchaToken} style={{ ...S.btn(`linear-gradient(135deg,${C.rose},${C.roseDark})`), opacity:captchaToken?1:0.55 }}>🔎 Tìm người giống khuôn mặt này</button>}
+      {(phase==="ready"||phase==="error") && face && <button onClick={search} style={S.btn(`linear-gradient(135deg,${C.rose},${C.roseDark})`)}>🔎 Tìm người giống khuôn mặt này</button>}
       {!preview && <button disabled style={S.btn("#1C1C1C","#444")}>🔎 Chọn ảnh trước</button>}
     </Modal>
   );
@@ -544,7 +492,6 @@ function PostItemModal({ onClose, onAdd }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [matches, setMatches] = useState(null);
-  const { elRef: captchaEl, token: captchaToken, reset: resetCaptcha } = useTurnstile();
   const set = k => v => setForm(f=>({...f,[k]:v}));
   const isDoc = ["CMND/CCCD","Bằng lái xe","Hộ chiếu"].includes(form.category);
   const onFill = (r, prev) => {
@@ -553,10 +500,8 @@ function PostItemModal({ onClose, onAdd }) {
   };
   const submit = async () => {
     if (busy || !form.title || !form.location || !form.contact) return;
-    if (!captchaToken) { setErr("Vui lòng xác nhận CAPTCHA (ô bên dưới) trước khi đăng."); return; }
     setBusy(true); setErr("");
-    const res = await onAdd({ id:uid(), type:ptype, ...form, img:catIcon(form.category), date:fmtDate() }, captchaToken);
-    resetCaptcha();
+    const res = await onAdd({ id:uid(), type:ptype, ...form, img:catIcon(form.category), date:fmtDate() });
     setBusy(false);
     if (!res?.ok) { setErr(res?.error || "Không lưu được tin (kiểm tra số điện thoại hoặc thử lại sau)."); return; }
     setDone(true);
@@ -599,9 +544,8 @@ function PostItemModal({ onClose, onAdd }) {
         <Field label="Số điện thoại liên hệ" value={form.contact} onChange={set("contact")} placeholder="0901 234 567" type="tel" required/>
         {ptype==="lost" && <Field label="Tiền thưởng (nếu có)" value={form.reward} onChange={set("reward")} placeholder="VD: 200.000đ"/>}
         <Field label="Ghi chú thêm" value={form.note} onChange={set("note")} placeholder="Đặc điểm nhận dạng thêm…" multiline/>
-        <CaptchaBox elRef={captchaEl}/>
         {err && <div style={{ background:"rgba(255,79,123,0.12)", border:`1px solid ${C.rose}`, borderRadius:10, padding:"9px 12px", fontSize:13, color:C.rose, marginBottom:12 }}>{err}</div>}
-        <button onClick={submit} disabled={busy||!captchaToken} style={{ ...S.btn(`linear-gradient(135deg,${ptype==="found"?C.teal:C.accent},${ptype==="found"?C.tealDark:C.accentDark})`), opacity:(busy||!captchaToken)?0.6:1 }}>{busy ? "Đang đăng…" : "Đăng tin ngay →"}</button>
+        <button onClick={submit} disabled={busy} style={{ ...S.btn(`linear-gradient(135deg,${ptype==="found"?C.teal:C.accent},${ptype==="found"?C.tealDark:C.accentDark})`), opacity:busy?0.6:1 }}>{busy ? "Đang đăng…" : "Đăng tin ngay →"}</button>
       </>}
     </Modal>
     {showScan && <DocScanModal onClose={()=>setShowScan(false)} onFill={onFill}/>}
@@ -626,7 +570,6 @@ function PostMissingModal({ onClose, onAdd }) {
   const [err, setErr] = useState("");
   const [matches, setMatches] = useState(null);
   const token = useRef(0);
-  const { elRef: captchaEl, token: captchaToken, reset: resetCaptcha } = useTurnstile();
   const set = k => v => setForm(f=>({...f,[k]:v}));
   // Mặc định: gia đình đang tìm người -> hiện ảnh công khai; người gặp người lạc -> KHÔNG hiện ảnh công khai
   const showPhoto = publicPhoto ?? (ptype === "missing");
@@ -670,7 +613,6 @@ function PostMissingModal({ onClose, onAdd }) {
     if (!form.hoTen || !form.lanCuoiThay || !form.contact) { setErr("Vui lòng điền Họ và tên, Địa điểm lần cuối thấy và Số điện thoại."); return; }
     if (faceState === "loading") { setErr("Đang phân tích ảnh, vui lòng chờ vài giây rồi bấm lại."); return; }
     if (imgPrev && !consent) { setErr("Vui lòng tích ô xác nhận về ảnh/khuôn mặt (hoặc bấm “Bỏ ảnh”)."); return; }
-    if (!captchaToken) { setErr("Vui lòng xác nhận CAPTCHA (ô bên dưới) trước khi đăng."); return; }
     setBusy(true); setErr("");
     try {
       let photoPath = null;
@@ -688,8 +630,7 @@ function PostMissingModal({ onClose, onAdd }) {
         danhTich: (form.danhTich + (note ? `\nLưu ý: ${note}` : "")).trim(),
         avatar:avatars[form.gioiTinh]||"👤", date:fmtDate(),
         face: face || null, photoPath, photoPublic: !!photoPath,
-      }, captchaToken);
-      resetCaptcha();
+      });
       if (!res?.ok) throw new Error(res?.error || "Không lưu được tin, vui lòng thử lại.");
       setDone(true);
       if (res.matches?.length) setMatches(res.matches); else setTimeout(onClose, 1800);
@@ -752,9 +693,8 @@ function PostMissingModal({ onClose, onAdd }) {
             <span>Tôi đăng ảnh này với mục đích giúp {ptype==="missing" ? "tìm người thân" : "người lạc đoàn tụ với gia đình"}, và đồng ý để hệ thống lưu <strong>dãy số đặc trưng khuôn mặt</strong> (không phải ảnh) để đối chiếu. Tôi sẽ nhờ quản trị viên đóng tin khi đã tìm thấy.</span>
           </label>
         </div>}
-        <CaptchaBox elRef={captchaEl}/>
         {err && <div style={{ background:"rgba(255,79,123,0.12)", border:`1px solid ${C.rose}`, borderRadius:10, padding:"9px 12px", fontSize:13, color:C.rose, marginBottom:12 }}>{err}</div>}
-        <button onClick={submit} disabled={busy||!captchaToken} style={{ ...S.btn(`linear-gradient(135deg,${tone},${ptype==="missing"?C.roseDark:C.tealDark})`), opacity:(busy||!captchaToken)?0.6:1 }}>{busy ? "Đang đăng…" : "🙏 Đăng tin ngay"}</button>
+        <button onClick={submit} disabled={busy} style={{ ...S.btn(`linear-gradient(135deg,${tone},${ptype==="missing"?C.roseDark:C.tealDark})`), opacity:busy?0.6:1 }}>{busy ? "Đang đăng…" : "🙏 Đăng tin ngay"}</button>
       </>}
     </Modal>
   );
@@ -1423,33 +1363,29 @@ export default function App() {
     return matchSub && (!q||[m.hoTen,m.danhTich,m.lanCuoiThay].some(f=>f?.toLowerCase().includes(q)));
   });
 
-  const addItem = async (item, captchaToken) => {
-    // Lưu tin + dò tin trùng khớp: qua máy chủ Vercel (kiểm tra CAPTCHA trước, rồi mới gọi post_item trong Supabase)
-    const r = await fetch("/api/post-item", { method:"POST", headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ p: {
-        type:item.type, category:item.category, title:item.title,
-        ho_ten:item.hoTen||"", so_giay_to:item.soGiayTo||"", ngay_sinh:item.ngaySinh||"",
-        location:item.location, contact:item.contact, reward:item.reward||"",
-        note:item.note||"", img:item.img, date:item.date }, captchaToken }) });
-    const j = await r.json().catch(()=>({}));
-    if (!r.ok || j.error) { console.error("Lỗi lưu tin:", j.error); return { ok:false, error: dbMsg({ message:j.error }) || j.error }; }
-    setItems(prev=>[{ ...item, id: j.data?.id ?? item.id }, ...prev]);
-    return { ok:true, matches: j.data?.matches || [] };
+  const addItem = async item => {
+    // Lưu tin + dò tin trùng khớp ngay trong database (hàm post_item trong Supabase)
+    const { data, error } = await supabase.rpc("post_item", { p: {
+      type:item.type, category:item.category, title:item.title,
+      ho_ten:item.hoTen||"", so_giay_to:item.soGiayTo||"", ngay_sinh:item.ngaySinh||"",
+      location:item.location, contact:item.contact, reward:item.reward||"",
+      note:item.note||"", img:item.img, date:item.date } });
+    if (error) { console.error("Lỗi lưu tin vào Supabase:", error); return { ok:false, error: dbMsg(error) }; }
+    setItems(prev=>[{ ...item, id: data?.id ?? item.id }, ...prev]);
+    return { ok:true, matches: data?.matches || [] };
   };
-  const addMissing = async (m, captchaToken) => {
-    // Lưu tin + dò người khớp (khuôn mặt / họ tên): qua máy chủ Vercel (kiểm tra CAPTCHA trước, rồi mới gọi post_missing)
-    const r = await fetch("/api/post-missing", { method:"POST", headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ p: {
-        type:m.type, ho_ten:m.hoTen||"", tuoi:m.tuoi||"", gioi_tinh:m.gioiTinh||"", danh_tich:m.danhTich||"",
-        trang_phuc:m.trangPhuc||"", lan_cuoi_thay:m.lanCuoiThay||"", thoi_gian:m.thoiGian||"",
-        contact:m.contact, reward:m.reward||"", urgency:m.urgency||"medium", avatar:m.avatar||"👤", date:m.date,
-        face:m.face||null, photo_path:m.photoPath||null, photo_public:!!m.photoPublic }, captchaToken }) });
-    const j = await r.json().catch(()=>({}));
-    if (!r.ok || j.error) { console.error("Lỗi lưu tin:", j.error); return { ok:false, error: dbMsg({ message:j.error }) || j.error || "Không lưu được tin, vui lòng thử lại sau." }; }
-    const shown = { ...m, id: j.data?.id ?? m.id, img: photoUrl(m.photoPath) };
+  const addMissing = async m => {
+    // Lưu tin + dò người khớp (khuôn mặt / họ tên) ngay trong database (hàm post_missing)
+    const { data, error } = await supabase.rpc("post_missing", { p: {
+      type:m.type, ho_ten:m.hoTen||"", tuoi:m.tuoi||"", gioi_tinh:m.gioiTinh||"", danh_tich:m.danhTich||"",
+      trang_phuc:m.trangPhuc||"", lan_cuoi_thay:m.lanCuoiThay||"", thoi_gian:m.thoiGian||"",
+      contact:m.contact, reward:m.reward||"", urgency:m.urgency||"medium", avatar:m.avatar||"👤", date:m.date,
+      face:m.face||null, photo_path:m.photoPath||null, photo_public:!!m.photoPublic } });
+    if (error) { console.error("Lỗi lưu tin vào Supabase:", error); return { ok:false, error: dbMsg(error) || "Không lưu được tin, vui lòng thử lại sau." }; }
+    const shown = { ...m, id: data?.id ?? m.id, img: photoUrl(m.photoPath) };
     delete shown.face; delete shown.photoPath; delete shown.photoPublic;   // không giữ vector khuôn mặt trong bộ nhớ trang
     setMissing(prev=>[shown, ...prev]);
-    return { ok:true, matches: j.data?.matches || [] };
+    return { ok:true, matches: data?.matches || [] };
   };
 
   if (adminMode) return <AdminPanel onExit={() => { window.location.hash = ""; }} />;
