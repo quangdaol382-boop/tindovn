@@ -1276,8 +1276,11 @@ function AdminPanel({ onExit }) {
       </>}
 
       {tab === "missing" && <>
-        <div style={{ fontSize:12, color:C.text3, marginBottom:8 }}>Hiển thị {Math.min(shownPersons.length, 200)}/{shownPersons.length} tin. Xóa là vĩnh viễn.</div>
-        {shownPersons.slice(0, 200).map(row => (
+        <div style={{ fontSize:12, color:C.text3, marginBottom:8 }}>Hiển thị {Math.min(shownPersons.length, 200)}/{shownPersons.length} tin. ⏳ = đăng quá 60 ngày, nên xem xét xóa (không tự động xóa). Xóa là vĩnh viễn.</div>
+        {shownPersons.slice(0, 200).map(row => {
+          const oldPost = row.status !== "resolved" && row.created_at &&
+            (Date.now() - new Date(row.created_at).getTime()) > 60 * 24 * 60 * 60 * 1000;
+          return (
           <div key={row.id} style={card}>
             <div style={{ display:"flex", gap:12 }}>
               {row.photo_path && <img src={photoUrl(row.photo_path)} alt="" style={{ width:64, height:64, borderRadius:10, objectFit:"cover", flexShrink:0 }}/>}
@@ -1286,6 +1289,7 @@ function AdminPanel({ onExit }) {
                   <span style={badge(row.type === "found_person" ? C.teal : C.rose)}>{row.type === "missing" ? "ĐANG TÌM NGƯỜI" : row.type === "found_person" ? "ĐÃ GẶP NGƯỜI LẠC" : String(row.type || "").toUpperCase()}</span>
                   {row.urgency === "high" && row.type === "missing" && <span style={badge(C.gold)}>KHẨN</span>}
                   {row.status === "resolved" && <span style={badge(C.accent)}>ĐÃ TÌM THẤY</span>}
+                  {oldPost && <span style={badge(C.gold)}>⏳ Quá 60 ngày — nên xem xét xóa</span>}
                 </div>
                 <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>{row.ho_ten} {row.tuoi ? `· ${row.tuoi}` : ""} {row.gioi_tinh ? `· ${row.gioi_tinh}` : ""}</div>
               </div>
@@ -1300,7 +1304,8 @@ function AdminPanel({ onExit }) {
               <button onClick={() => removeRow("missing_persons", row, row.ho_ten || "")} style={btnSm(C.rose)}>🗑 Xóa</button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </>}
     </div></div>
   );
