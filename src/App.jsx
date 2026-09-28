@@ -335,7 +335,7 @@ const FACE_LEVELS = {
 
 // ─── CAPTCHA (Cloudflare Turnstile) ──────────────────────────────────────────
 // Site Key công khai, không cần giữ bí mật (Secret Key nằm ở máy chủ, trong biến môi trường Vercel)
-const TURNSTILE_SITE_KEY = "0x4AAAAAAAFGTTI5mCFlqOqFM";
+const TURNSTILE_SITE_KEY = "0x4AAAAAAFGTTI5mCFlqOqFM";
 function useTurnstile() {
   const [token, setToken] = useState("");
   const elRef = useRef(null);
