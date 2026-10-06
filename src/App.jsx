@@ -1505,21 +1505,21 @@ export default function App() {
             <h1 style={{ fontSize:34, fontWeight:900, margin:"0 0 10px", lineHeight:1.1, letterSpacing:-1, color:C.heroTitle }}>Tìm người thân<br/><span style={{ color:C.rose }}>thất lạc</span></h1>
             <p style={{ color:C.statText, fontSize:14, margin:"0 0 20px", lineHeight:1.65 }}>Đăng tin hoặc <strong style={{ color:C.heroAccent }}>tải ảnh để AI đối chiếu</strong> với hồ sơ người mất tích</p>
           </> : <>
-            <div style={{ fontSize:11, color:C.accent, fontWeight:700, letterSpacing:3, textTransform:"uppercase", marginBottom:10 }}>Cộng đồng hỗ trợ lẫn nhau</div>
+            <div style={{ fontSize:11, color:C.accent, fontWeight:700, letterSpacing:3, textTransform:"uppercase", marginBottom:10 }}>Nền tảng kết nối và hỗ trợ cộng đồng</div>
             <h1 style={{ fontSize:34, fontWeight:900, margin:"0 0 10px", lineHeight:1.1, letterSpacing:-1, color:C.heroTitle }}>Mất đồ? Nhặt được?<br/><span style={{ color:C.heroAccent }}>Kết nối ngay!</span></h1>
             <p style={{ color:C.statText, fontSize:14, margin:"0 0 20px", lineHeight:1.65 }}>Tải ảnh giấy tờ — <strong style={{ color:C.heroAccent }}>AI tự nhận diện & điền thông tin</strong></p>
           </>}
           <div style={{ position:"relative", maxWidth:440, margin:"0 auto 20px" }}>
             <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", fontSize:16, pointerEvents:"none" }}>🔍</span>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={mainTab==="missing"?"Tìm theo tên, đặc điểm, địa điểm…":"Tìm theo tên, số CCCD, địa điểm…"} style={{ ...S.input, padding:"13px 14px 13px 42px", borderRadius:14, fontSize:15, border:`1.5px solid ${C.border}`, color:"#FFFFFF", background:"rgba(255,255,255,0.1)", "::placeholder":{color:"#9CA3AF"} }}/>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={mainTab==="missing"?"Tìm theo tên, đặc điểm, địa điểm…":"Tra cứu nhanh theo tên, số giấy tờ hoặc địa điểm, thông tin người thất lạc…"} style={{ ...S.input, padding:"13px 14px 13px 42px", borderRadius:14, fontSize:15, border:`1.5px solid ${C.border}`, color:"#FFFFFF", background:"rgba(255,255,255,0.1)", "::placeholder":{color:"#9CA3AF"} }}/>
             {search && <button onClick={()=>setSearch("")} style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"transparent", border:"none", color:C.text3, cursor:"pointer", fontSize:18 }}>×</button>}
           </div>
-          <div style={{ display:"flex", justifyContent:"center", gap:32 }}>
+          <div style={{ display:"flex", justifyContent:"center", gap:24, flexWrap:"wrap", rowGap:8 }}>
             {(mainTab==="missing"
               ? [[C.rose,urgentCount,"Khẩn cấp"],[C.heroAccent,missing.filter(m=>m.type==="missing").length,"Đang tìm"],[C.teal,missing.filter(m=>m.type==="found_person").length,"Đã gặp"]]
-              : [[C.heroAccent,items.filter(i=>i.type==="lost").length,"Đang tìm"],[C.teal,items.filter(i=>i.type==="found").length,"Chờ nhận"],[C.statText,"312","Đã trả lại"]]
+              : [[C.heroAccent,items.filter(i=>i.type==="lost").length,"Đang xác minh"],[C.teal,items.filter(i=>i.type==="found").length,"Chờ xác nhận"],[C.statText,"312","Đã kết nối thành công"]]
             ).map(([color,n,l])=>(
-              <div key={l}><div style={{ fontSize:26, fontWeight:900, color, lineHeight:1 }}>{n}</div><div style={{ fontSize:10, color:C.statText, letterSpacing:1, textTransform:"uppercase", marginTop:3 }}>{l}</div></div>
+              <div key={l} style={{ maxWidth:96, textAlign:"center" }}><div style={{ fontSize:26, fontWeight:900, color, lineHeight:1 }}>{n}</div><div style={{ fontSize:10, color:C.statText, letterSpacing:1, textTransform:"uppercase", marginTop:3, lineHeight:1.4 }}>{l}</div></div>
             ))}
           </div>
         </div>
@@ -1533,7 +1533,7 @@ export default function App() {
         </div>
       ) : (
         <div style={{ background:`linear-gradient(90deg,${C.violet}12,${C.violetDark}05)`, borderBottom:`1px solid ${C.violet}20`, padding:"10px 22px", textAlign:"center" }}>
-          <span style={{ fontSize:13, color:"#9D99FF" }}>🤖 <strong>AI Vision</strong> — Chụp ảnh CCCD / Bằng lái / Hộ chiếu, AI tự đọc họ tên & số giấy tờ</span>
+          <span style={{ fontSize:13, color:"#9D99FF" }}>🤖 <strong>AI Vision</strong> — Ứng dụng công nghệ AI hỗ trợ nhận diện và điền thông tin nhanh chóng, chính xác và bảo mật.</span>
         </div>
       )}
 
@@ -1598,7 +1598,7 @@ export default function App() {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:20, marginBottom:20 }}>
             <div>
               <div style={{ fontWeight:900, fontSize:18, marginBottom:6 }}>TìmĐồ<span style={{ color:C.accent }}>.vn</span></div>
-              <div style={{ fontSize:13, color:C.text3, maxWidth:280, lineHeight:1.6 }}>Nền tảng cộng đồng giúp tìm lại đồ vật thất lạc và kết nối người thân.</div>
+              <div style={{ fontSize:13, color:C.text3, maxWidth:280, lineHeight:1.6 }}>Hỗ trợ tìm kiếm và trao trả tài sản, người thân thất lạc nhanh chóng, tin cậy.</div>
             </div>
             <div style={{ display:"flex", gap:40, flexWrap:"wrap" }}>
               {[["Tính năng",["🔍 Tìm đồ vật","👤 Tìm người thân","🤖 AI Nhận diện","🔎 Đối chiếu ảnh"]],["Hỗ trợ",["📞 Hotline: 1800 9999","📧 help@timdovn.vn","💬 Chat hỗ trợ"]]].map(([title,links])=>(
