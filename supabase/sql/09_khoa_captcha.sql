@@ -23,6 +23,19 @@ revoke execute on function public.post_item(jsonb)               from anon, auth
 revoke execute on function public.post_missing(jsonb)             from anon, authenticated;
 revoke execute on function public.search_face(jsonb, text, text)  from anon, authenticated;
 
+-- QUAN TRỌNG: Postgres tự động cấp EXECUTE cho PUBLIC (= mọi vai trò, kể cả
+-- anon/authenticated) khi tạo hàm, nên chỉ revoke từ anon/authenticated thôi
+-- là CHƯA ĐỦ — phải revoke từ PUBLIC nữa thì mới thực sự khoá được.
+revoke execute on function public.post_item(jsonb)               from PUBLIC;
+revoke execute on function public.post_missing(jsonb)             from PUBLIC;
+revoke execute on function public.search_face(jsonb, text, text)  from PUBLIC;
+
+-- Cấp lại riêng cho service_role (máy chủ Vercel dùng Service Role Key gọi
+-- hàm) để không bị khoá nhầm luôn cả đường gọi hợp lệ từ server.
+grant execute on function public.post_item(jsonb)               to service_role;
+grant execute on function public.post_missing(jsonb)             to service_role;
+grant execute on function public.search_face(jsonb, text, text)  to service_role;
+
 create or replace function public.client_ip()
 returns text
 language plpgsql
@@ -59,7 +72,7 @@ select 'Phần 9 (khóa CAPTCHA) chạy xong' as ket_qua;
 --   không phải một địa chỉ IP lạ lặp lại cho mọi người.
 --
 -- HOÀN TÁC (nếu cần mở lại đường gọi thẳng, KHÔNG khuyến khích):
---   grant execute on function public.post_item(jsonb)                 to anon, authenticated;
---   grant execute on function public.post_missing(jsonb)              to anon, authenticated;
---   grant execute on function public.search_face(jsonb, text, text)   to anon, authenticated;
+--   grant execute on function public.post_item(jsonb)                 to anon, authenticated, PUBLIC;
+--   grant execute on function public.post_missing(jsonb)              to anon, authenticated, PUBLIC;
+--   grant execute on function public.search_face(jsonb, text, text)   to anon, authenticated, PUBLIC;
 -- ---------------------------------------------------------------------
