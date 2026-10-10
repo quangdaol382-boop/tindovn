@@ -21,6 +21,9 @@ export async function verifyTurnstile(token, ip) {
       }),
     });
     const d = await r.json();
+    if (!d.success) {
+      console.error("Turnstile siteverify thất bại:", JSON.stringify(d));
+    }
     return !!d.success;
   } catch (e) {
     console.error("verifyTurnstile lỗi:", e);
