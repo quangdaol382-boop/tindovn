@@ -13,7 +13,7 @@ const supabaseAdmin =
     ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
     : null;
 
-const ZALO_APP_ID = "824115373376391030";
+const ZALO_APP_ID = "495616562983255585";
 
 function htmlPage(title, message, ok) {
   return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/>

@@ -16,7 +16,7 @@ const supabaseAdmin =
     ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
     : null;
 
-const ZALO_APP_ID = "824115373376391030";
+const ZALO_APP_ID = "495616562983255585";
 // Mã xác nhận web tạo ra có dạng TD-XXXX (chữ hoa/số, 4-8 ký tự)
 const CODE_PATTERN = /TD-[A-Z0-9]{4,8}/;
 
