@@ -15,8 +15,8 @@ const TONE = {
   found: { solid:"bg-ok-500 hover:bg-ok-600",        text:"text-ok-700",    chipBg:"bg-ok-50",    chipText:"text-ok-700",    chipBorder:"border-ok-200",    ring:"border-ok-500",    soft:"bg-ok-50",    dot:"bg-ok-500" },
   missing:      { solid:"bg-warn-600 hover:bg-warn-700", text:"text-warn-700", chipBg:"bg-warn-50", chipText:"text-warn-700", chipBorder:"border-warn-200", ring:"border-warn-500", soft:"bg-warn-50", dot:"bg-warn-600" },
   found_person: { solid:"bg-ok-500 hover:bg-ok-600",     text:"text-ok-700",   chipBg:"bg-ok-50",   chipText:"text-ok-700",   chipBorder:"border-ok-200",   ring:"border-ok-500",   soft:"bg-ok-50",   dot:"bg-ok-500" },
-  urgent_high:   { solid:"bg-warn-600 hover:bg-warn-700", text:"text-warn-700", chipBg:"bg-warn-50", chipText:"text-warn-700", chipBorder:"border-warn-200" },
-  urgent_medium: { solid:"bg-gold-500 hover:bg-gold-600", text:"text-gold-600", chipBg:"bg-gold-50", chipText:"text-gold-600", chipBorder:"border-gold-400/40" },
+  urgent_high:   { solid:"bg-red-600 hover:bg-red-700",   text:"text-red-700",  chipBg:"bg-red-50",  chipText:"text-red-700",  chipBorder:"border-red-200" },
+  urgent_medium: { solid:"bg-warn-600 hover:bg-warn-700", text:"text-warn-700", chipBg:"bg-warn-50", chipText:"text-warn-700", chipBorder:"border-warn-200" },
   ai: { solid:"bg-ai-600 hover:bg-ai-700", text:"text-ai-700", chipBg:"bg-ai-50", chipText:"text-ai-700", chipBorder:"border-ai-200", soft:"bg-ai-50" },
 };
 
@@ -900,9 +900,9 @@ function MissingDetail({ person, onClose, onFaceSearch }) {
           {person.img ? <img src={person.img} alt="" className="w-full h-full object-cover rounded-[14px]"/> : person.avatar}
         </div>
         <div>
-          {!isFound && person.urgency==="high" && <Chip text="🚨 Khẩn cấp" className="bg-warn-50 text-warn-700 border-warn-200"/>}
+          {!isFound && person.urgency==="high" && <Chip text="🚨 Khẩn cấp" className="bg-red-50 text-red-700 border-red-200"/>}
           {isFound && <Chip text="🟢 Đã gặp được" className="bg-ok-50 text-ok-700 border-ok-200"/>}
-          {!isFound && person.urgency==="medium" && <Chip text="⚠️ Đang tìm" className="bg-gold-50 text-gold-600 border-gold-400/40"/>}
+          {!isFound && person.urgency==="medium" && <Chip text="⚠️ Đang tìm" className="bg-warn-50 text-warn-700 border-warn-200"/>}
           <h2 className="font-black text-[19px] my-2 text-slate-900">{person.hoTen}</h2>
           <div className="text-[13px] text-slate-400">{person.tuoi} · {person.gioiTinh}</div>
         </div>
@@ -962,9 +962,9 @@ function MissingCard({ person, onClick }) {
   return (
     <div onClick={onClick}
       className={`${cardCls} p-4.5 p-[18px] cursor-pointer transition-all duration-150 relative hover:-translate-y-1 hover:shadow-lg`}>
-      {person.urgency==="high" && !isFound && <div className="absolute top-3.5 right-3.5"><Chip text="🚨 Khẩn" className="bg-warn-50 text-warn-700 border-warn-200"/></div>}
+      {person.urgency==="high" && !isFound && <div className="absolute top-3.5 right-3.5"><Chip text="🚨 Khẩn" className="bg-red-50 text-red-700 border-red-200"/></div>}
       {isFound && <div className="absolute top-3.5 right-3.5"><Chip text="🟢 Đã gặp" className="bg-ok-50 text-ok-700 border-ok-200"/></div>}
-      {!isFound && person.urgency==="medium" && <div className="absolute top-3.5 right-3.5"><Chip text="⚠️ Tìm kiếm" className="bg-gold-50 text-gold-600 border-gold-400/40"/></div>}
+      {!isFound && person.urgency==="medium" && <div className="absolute top-3.5 right-3.5"><Chip text="⚠️ Tìm kiếm" className="bg-warn-50 text-warn-700 border-warn-200"/></div>}
       <div className="flex items-center gap-3 mb-2.5">
         <div className={`w-[50px] h-[50px] rounded-xl ${uTone.chipBg} border ${uTone.chipBorder} flex items-center justify-center text-2xl shrink-0 overflow-hidden`}>
           {person.img ? <img src={person.img} alt="" className="w-full h-full object-cover"/> : person.avatar}
@@ -1221,7 +1221,7 @@ const adminBtnCls = (tone) => {
   return `bg-white border rounded-lg px-3 py-1.5 font-bold text-xs cursor-pointer transition ${map[tone]||map.ghost}`;
 };
 const adminBadgeCls = (tone) => {
-  const map = { brand:"text-brand-700 border-brand-300", warn:"text-warn-700 border-warn-300", ok:"text-ok-700 border-ok-300", gold:"text-gold-600 border-gold-400", slate:"text-slate-500 border-slate-300" };
+  const map = { brand:"text-brand-700 border-brand-300", warn:"text-warn-700 border-warn-300", ok:"text-ok-700 border-ok-300", gold:"text-gold-600 border-gold-400", red:"text-red-700 border-red-300", slate:"text-slate-500 border-slate-300" };
   return `inline-block text-[11px] font-extrabold border rounded-md px-1.5 py-0.5 mr-1.5 mb-1 ${map[tone]||map.slate}`;
 };
 
@@ -1404,7 +1404,7 @@ function AdminPanel({ onExit }) {
               <div className="min-w-0">
                 <div className="mb-1.5">
                   <span className={adminBadgeCls(row.type === "found_person" ? "ok" : "warn")}>{row.type === "missing" ? "ĐANG TÌM NGƯỜI" : row.type === "found_person" ? "ĐÃ GẶP NGƯỜI LẠC" : String(row.type || "").toUpperCase()}</span>
-                  {row.urgency === "high" && row.type === "missing" && <span className={adminBadgeCls("gold")}>KHẨN</span>}
+                  {row.urgency === "high" && row.type === "missing" && <span className={adminBadgeCls("red")}>KHẨN</span>}
                   {row.status === "resolved" && <span className={adminBadgeCls("ok")}>ĐÃ TÌM THẤY</span>}
                   {oldPost && <span className={adminBadgeCls("gold")}>⏳ Quá 60 ngày — nên xem xét xóa</span>}
                 </div>
@@ -1552,14 +1552,14 @@ export default function App() {
           {[["items","🪪","Đồ vật thất lạc"],["missing","👤","Tìm người thân"]].map(([v,icon,l])=>(
             <button key={v} onClick={()=>{setMainTab(v);setSearch("");}} className={`px-4 sm:px-5 py-3.5 border-0 border-b-[2.5px] bg-transparent font-bold text-sm cursor-pointer flex items-center gap-1.5 relative whitespace-nowrap transition ${mainTab===v?(v==="missing"?"text-warn-700 border-warn-600":"text-brand-700 border-brand-600"):"text-slate-400 border-transparent hover:text-slate-600"}`}>
               <span>{icon}</span><span>{l}</span>
-              {v==="missing"&&urgentCount>0 && <span className="bg-warn-600 text-white text-[10px] font-extrabold w-[18px] h-[18px] rounded-full inline-flex items-center justify-center animate-blink">{urgentCount}</span>}
+              {v==="missing"&&urgentCount>0 && <span className="bg-red-600 text-white text-[10px] font-extrabold w-[18px] h-[18px] rounded-full inline-flex items-center justify-center animate-blink">{urgentCount}</span>}
             </button>
           ))}
         </div>
       </div>
 
       {/* HERO / BANNER TÌM KIẾM ĐA NĂNG */}
-      <div className={`bg-gradient-to-b ${mainTab==="missing" ? "from-warn-700 to-warn-600" : "from-brand-700 to-brand-600"} px-4 sm:px-5.5 sm:px-[22px] pt-9 sm:pt-10 pb-7 text-center`}>
+      <div className={`bg-gradient-to-b ${mainTab==="missing" ? "from-warn-700 to-warn-600" : "from-brand-700 to-brand-600"} px-4 sm:px-5.5 sm:px-[22px] pt-9 sm:pt-10 pb-14 text-center`}>
         <div className="max-w-[600px] mx-auto">
           {mainTab==="missing" ? <>
             <div className="text-[11px] text-warn-100 font-bold tracking-[3px] uppercase mb-2.5">Kết nối · Chia sẻ · Tìm thấy</div>
@@ -1570,19 +1570,27 @@ export default function App() {
             <h1 className="text-[28px] sm:text-[34px] font-black m-0 mb-2.5 leading-[1.1] tracking-tight text-white">Mất đồ? Nhặt được?<br/><span className="text-white/90">Kết nối ngay!</span></h1>
             <p className="text-brand-50 text-sm m-0 mb-5 leading-relaxed">Tải ảnh giấy tờ — <strong className="text-white">AI tự nhận diện & điền thông tin</strong></p>
           </>}
-          <div className="relative max-w-[440px] mx-auto mb-5">
+          <div className="relative max-w-[440px] mx-auto">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-base pointer-events-none">🔍</span>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={mainTab==="missing"?"Tìm theo tên, đặc điểm, địa điểm…":"Tra cứu nhanh theo tên, số giấy tờ hoặc địa điểm…"} className="w-full box-border px-3.5 py-3 pl-11 rounded-2xl text-[15px] border-0 outline-none bg-white text-slate-900 placeholder:text-slate-400 shadow-lg"/>
             {search && <button onClick={()=>setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-none text-slate-400 cursor-pointer text-lg">×</button>}
           </div>
-          <div className="flex justify-center gap-6 flex-wrap gap-y-2">
-            {(mainTab==="missing"
-              ? [[urgentCount,"Khẩn cấp"],[missing.filter(m=>m.type==="missing").length,"Đang tìm"],[missing.filter(m=>m.type==="found_person").length,"Đã gặp"]]
-              : [[items.filter(i=>i.type==="lost").length,"Đang xác minh"],[items.filter(i=>i.type==="found").length,"Chờ xác nhận"],["312","Đã kết nối thành công"]]
-            ).map(([n,l])=>(
-              <div key={l} className="max-w-[100px] text-center"><div className="text-2xl sm:text-[26px] font-black text-white leading-none">{n}</div><div className="text-[10px] text-white/80 tracking-wide uppercase mt-1 leading-snug">{l}</div></div>
-            ))}
-          </div>
+        </div>
+      </div>
+
+      {/* STAT CARD — nổi đè lên mép dưới hero */}
+      <div className="px-4 sm:px-5.5 sm:px-[22px] -mt-8 mb-6 relative z-10">
+        <div className="max-w-[640px] mx-auto bg-white rounded-2xl shadow-lg border border-slate-100 grid grid-cols-3 divide-x divide-slate-100">
+          {(mainTab==="missing"
+            ? [[urgentCount,"Khẩn cấp","🚨","bg-red-50 text-red-600"],[missing.filter(m=>m.type==="missing").length,"Đang tìm","🟠","bg-warn-50 text-warn-600"],[missing.filter(m=>m.type==="found_person").length,"Đã gặp","✅","bg-ok-50 text-ok-600"]]
+            : [[items.filter(i=>i.type==="lost").length,"Đang xác minh","🔵","bg-brand-50 text-brand-600"],[items.filter(i=>i.type==="found").length,"Chờ xác nhận","🟠","bg-warn-50 text-warn-600"],["312","Đã kết nối thành công","✅","bg-ok-50 text-ok-600"]]
+          ).map(([n,l,icon,tone])=>(
+            <div key={l} className="flex flex-col items-center justify-center gap-1.5 py-4 px-2 text-center">
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0 ${tone}`}>{icon}</div>
+              <div className="text-lg sm:text-xl font-black text-slate-900 leading-none">{n}</div>
+              <div className="text-[10px] text-slate-400 tracking-wide uppercase leading-snug">{l}</div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1623,11 +1631,11 @@ export default function App() {
 
       {/* URGENT BANNER */}
       {mainTab==="missing" && urgentCount>0 && (
-        <div className="bg-warn-50 border-b border-warn-200 px-4 sm:px-5.5 sm:px-[22px] py-2.5">
+        <div className="bg-red-50 border-b border-red-200 px-4 sm:px-5.5 sm:px-[22px] py-2.5">
           <div className="max-w-[1140px] mx-auto flex items-center gap-2.5 flex-wrap">
             <span className="animate-blink text-lg">🚨</span>
-            <span className="text-[13px] text-warn-700 font-semibold">{urgentCount} trường hợp khẩn cấp cần sự giúp đỡ ngay</span>
-            <button onClick={()=>setFaceSearch(true)} className="sm:ml-auto bg-white border border-warn-300 rounded-lg px-3.5 py-1.5 text-warn-700 text-xs font-bold cursor-pointer">Tôi có thể giúp →</button>
+            <span className="text-[13px] text-red-700 font-semibold">{urgentCount} trường hợp khẩn cấp cần sự giúp đỡ ngay</span>
+            <button onClick={()=>setFaceSearch(true)} className="sm:ml-auto bg-white border border-red-300 rounded-lg px-3.5 py-1.5 text-red-700 text-xs font-bold cursor-pointer">Tôi có thể giúp →</button>
           </div>
         </div>
       )}
