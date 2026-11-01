@@ -1559,17 +1559,17 @@ export default function App() {
       </div>
 
       {/* HERO / BANNER TÌM KIẾM ĐA NĂNG */}
-      <div className={`bg-gradient-to-b ${mainTab==="missing" ? "from-warn-700 to-warn-600" : "from-brand-700 to-brand-600"} px-4 sm:px-5.5 sm:px-[22px] pt-8 sm:pt-9 pb-14 text-center`}>
+      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-purple-950 px-4 sm:px-5.5 sm:px-[22px] pt-8 sm:pt-9 pb-14 text-center">
         <div className="max-w-[600px] mx-auto">
-          <div className="inline-flex items-center gap-1.5 bg-white/15 border border-white/25 rounded-full px-3.5 py-1.5 text-[11px] text-white font-semibold mb-4">
+          <div className="inline-flex items-center gap-1.5 bg-white/10 border border-white/20 rounded-full px-3.5 py-1.5 text-[11px] text-white font-semibold mb-4">
             <span>🤖</span><span>Công nghệ AI hỗ trợ tìm đồ thất lạc &amp; kết nối người thân</span>
           </div>
           {mainTab==="missing" ? <>
-            <h1 className="text-[28px] sm:text-[34px] font-black m-0 mb-2.5 leading-[1.1] tracking-tight text-white">Kết nối yêu thương —<br/><span className="text-white/90">Tìm lại điều quý giá</span></h1>
-            <p className="text-warn-50 text-sm m-0 mb-5 leading-relaxed">Đăng tin hoặc <strong className="text-white">tải ảnh để AI đối chiếu</strong> với hồ sơ người mất tích</p>
+            <h1 className="text-[28px] sm:text-[34px] font-black m-0 mb-2.5 leading-[1.1] tracking-tight text-white">Kết nối yêu thương —<br/><span className="text-amber-300">Tìm lại điều quý giá</span></h1>
+            <p className="text-slate-300 text-sm m-0 mb-5 leading-relaxed">Đăng tin hoặc <strong className="text-white">tải ảnh để AI đối chiếu</strong> với hồ sơ người mất tích</p>
           </> : <>
-            <h1 className="text-[28px] sm:text-[34px] font-black m-0 mb-2.5 leading-[1.1] tracking-tight text-white">Mất đồ? Nhặt được?<br/><span className="text-white/90">Kết nối ngay!</span></h1>
-            <p className="text-brand-50 text-sm m-0 mb-5 leading-relaxed">Tải ảnh giấy tờ — <strong className="text-white">AI tự nhận diện &amp; điền thông tin</strong></p>
+            <h1 className="text-[28px] sm:text-[34px] font-black m-0 mb-2.5 leading-[1.1] tracking-tight text-white">Mất đồ? Nhặt được?<br/><span className="text-sky-300">Kết nối ngay!</span></h1>
+            <p className="text-slate-300 text-sm m-0 mb-5 leading-relaxed">Tải ảnh giấy tờ — <strong className="text-white">AI tự nhận diện &amp; điền thông tin</strong></p>
           </>}
 
           <div className="bg-white rounded-2xl shadow-lg p-2 flex flex-col sm:flex-row gap-2 max-w-[560px] mx-auto">
@@ -1583,7 +1583,7 @@ export default function App() {
 
           {mainTab==="items" && (
             <div className="flex items-center justify-center gap-2 flex-wrap mt-3 text-xs">
-              <span className="text-brand-100">Gợi ý:</span>
+              <span className="text-slate-300">Gợi ý:</span>
               {["CMND/CCCD","Bằng lái xe","Ví/Túi xách","Chìa khóa"].map(c=>(
                 <button key={c} onClick={()=>{setSearch(c);setCat(normalizeCategory(c));}} className="bg-white/15 hover:bg-white/25 border border-white/25 rounded-full px-3 py-1 text-white font-semibold cursor-pointer transition">{c}</button>
               ))}
