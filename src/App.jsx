@@ -1559,21 +1559,44 @@ export default function App() {
       </div>
 
       {/* HERO / BANNER TÌM KIẾM ĐA NĂNG */}
-      <div className={`bg-gradient-to-b ${mainTab==="missing" ? "from-warn-700 to-warn-600" : "from-brand-700 to-brand-600"} px-4 sm:px-5.5 sm:px-[22px] pt-9 sm:pt-10 pb-14 text-center`}>
+      <div className={`bg-gradient-to-b ${mainTab==="missing" ? "from-warn-700 to-warn-600" : "from-brand-700 to-brand-600"} px-4 sm:px-5.5 sm:px-[22px] pt-8 sm:pt-9 pb-14 text-center`}>
         <div className="max-w-[600px] mx-auto">
+          <div className="inline-flex items-center gap-1.5 bg-white/15 border border-white/25 rounded-full px-3.5 py-1.5 text-[11px] text-white font-semibold mb-4">
+            <span>🤖</span><span>Công nghệ AI hỗ trợ tìm đồ thất lạc &amp; kết nối người thân</span>
+          </div>
           {mainTab==="missing" ? <>
-            <div className="text-[11px] text-warn-100 font-bold tracking-[3px] uppercase mb-2.5">Kết nối · Chia sẻ · Tìm thấy</div>
-            <h1 className="text-[28px] sm:text-[34px] font-black m-0 mb-2.5 leading-[1.1] tracking-tight text-white">Tìm người thân<br/><span className="text-white/90">thất lạc</span></h1>
+            <h1 className="text-[28px] sm:text-[34px] font-black m-0 mb-2.5 leading-[1.1] tracking-tight text-white">Kết nối yêu thương —<br/><span className="text-white/90">Tìm lại điều quý giá</span></h1>
             <p className="text-warn-50 text-sm m-0 mb-5 leading-relaxed">Đăng tin hoặc <strong className="text-white">tải ảnh để AI đối chiếu</strong> với hồ sơ người mất tích</p>
           </> : <>
-            <div className="text-[11px] text-brand-100 font-bold tracking-[3px] uppercase mb-2.5">Nền tảng kết nối và hỗ trợ cộng đồng</div>
             <h1 className="text-[28px] sm:text-[34px] font-black m-0 mb-2.5 leading-[1.1] tracking-tight text-white">Mất đồ? Nhặt được?<br/><span className="text-white/90">Kết nối ngay!</span></h1>
-            <p className="text-brand-50 text-sm m-0 mb-5 leading-relaxed">Tải ảnh giấy tờ — <strong className="text-white">AI tự nhận diện & điền thông tin</strong></p>
+            <p className="text-brand-50 text-sm m-0 mb-5 leading-relaxed">Tải ảnh giấy tờ — <strong className="text-white">AI tự nhận diện &amp; điền thông tin</strong></p>
           </>}
-          <div className="relative max-w-[440px] mx-auto">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-base pointer-events-none">🔍</span>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={mainTab==="missing"?"Tìm theo tên, đặc điểm, địa điểm…":"Tra cứu nhanh theo tên, số giấy tờ hoặc địa điểm…"} className="w-full box-border px-3.5 py-3 pl-11 rounded-2xl text-[15px] border-0 outline-none bg-white text-slate-900 placeholder:text-slate-400 shadow-lg"/>
-            {search && <button onClick={()=>setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-none text-slate-400 cursor-pointer text-lg">×</button>}
+
+          <div className="bg-white rounded-2xl shadow-lg p-2 flex flex-col sm:flex-row gap-2 max-w-[560px] mx-auto">
+            <div className="relative flex-1">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-base pointer-events-none">🔍</span>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={mainTab==="missing"?"Tìm theo tên, đặc điểm, địa điểm…":"Nhập tên, CCCD, biển số xe…"} className="w-full h-full box-border px-3.5 py-3 pl-11 rounded-xl text-[15px] border-0 outline-none bg-transparent text-slate-900 placeholder:text-slate-400"/>
+              {search && <button onClick={()=>setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-none text-slate-400 cursor-pointer text-lg">×</button>}
+            </div>
+            {mainTab==="missing" && <button onClick={()=>setFaceSearch(true)} className="shrink-0 border-none rounded-xl px-4 py-3 bg-ai-600 hover:bg-ai-700 text-white font-bold text-sm cursor-pointer transition whitespace-nowrap">📷 Quét ảnh đối chiếu</button>}
+          </div>
+
+          {mainTab==="items" && (
+            <div className="flex items-center justify-center gap-2 flex-wrap mt-3 text-xs">
+              <span className="text-brand-100">Gợi ý:</span>
+              {["CMND/CCCD","Bằng lái xe","Ví/Túi xách","Chìa khóa"].map(c=>(
+                <button key={c} onClick={()=>{setSearch(c);setCat(normalizeCategory(c));}} className="bg-white/15 hover:bg-white/25 border border-white/25 rounded-full px-3 py-1 text-white font-semibold cursor-pointer transition">{c}</button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row items-stretch justify-center gap-2.5 mt-5 max-w-[560px] mx-auto">
+            {mainTab==="items" ? (
+              <button onClick={()=>{setMainTab("missing");setSearch("");}} className="flex-1 border-none rounded-xl px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-extrabold text-sm cursor-pointer transition">❤️ Tìm người thân mất tích</button>
+            ) : (
+              <button onClick={()=>{setMainTab("items");setSearch("");}} className="flex-1 border-none rounded-xl px-4 py-3 bg-brand-800 hover:bg-brand-900 text-white font-extrabold text-sm cursor-pointer transition">🪪 Tìm đồ thất lạc</button>
+            )}
+            <button onClick={()=>{ mainTab==="items"?setPostItem(true):setPostMissing(true); }} className="flex-1 border-none rounded-xl px-4 py-3 bg-ok-500 hover:bg-ok-600 text-white font-extrabold text-sm cursor-pointer transition">➕ {mainTab==="items"?"Đăng tin nhặt/mất đồ ngay":"Đăng tin tìm người thân ngay"}</button>
           </div>
         </div>
       </div>
