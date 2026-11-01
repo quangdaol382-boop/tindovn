@@ -8,18 +8,16 @@ const supabase = createClient(
   "sb_publishable_t9L83Ag6Tbr3PK3_SNEIGw_uiKra69S"
 );
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
-const C = {
-  accent: "#27AE60", accentDark: "#1E8449",
-  teal: "#2EC4B6",   tealDark: "#1AA398",
-  violet: "#7C6FFF", violetDark: "#4F46E5",
-  rose: "#FF4F7B",   roseDark: "#C9184A",
-  gold: "#F1C40F",
-  bg: "#0A1A0F", bg1: "#0D1F12", bg2: "#112816", bg3: "#163020",
-  border: "#1E4D2B", border2: "#2A6B3A",
-  text: "#FFFFFF", text2: "#D1D5DB", text3: "#9CA3AF",
-  heroTitle: "#FFFFFF", heroAccent: "#F1C40F",
-  statText: "#E0F2FE",
+// ─── Bảng màu theo loại tin (Tailwind class tĩnh — an toàn với JIT) ───────────
+// Xanh dương = đang tìm / thương hiệu · Xanh lá = đã nhặt / tích cực · Cam = khẩn cấp / cảnh báo · Tím = AI
+const TONE = {
+  lost:  { solid:"bg-brand-600 hover:bg-brand-700", text:"text-brand-700", chipBg:"bg-brand-50", chipText:"text-brand-700", chipBorder:"border-brand-200", ring:"border-brand-500", soft:"bg-brand-50", dot:"bg-brand-600" },
+  found: { solid:"bg-ok-500 hover:bg-ok-600",        text:"text-ok-700",    chipBg:"bg-ok-50",    chipText:"text-ok-700",    chipBorder:"border-ok-200",    ring:"border-ok-500",    soft:"bg-ok-50",    dot:"bg-ok-500" },
+  missing:      { solid:"bg-warn-600 hover:bg-warn-700", text:"text-warn-700", chipBg:"bg-warn-50", chipText:"text-warn-700", chipBorder:"border-warn-200", ring:"border-warn-500", soft:"bg-warn-50", dot:"bg-warn-600" },
+  found_person: { solid:"bg-ok-500 hover:bg-ok-600",     text:"text-ok-700",   chipBg:"bg-ok-50",   chipText:"text-ok-700",   chipBorder:"border-ok-200",   ring:"border-ok-500",   soft:"bg-ok-50",   dot:"bg-ok-500" },
+  urgent_high:   { solid:"bg-warn-600 hover:bg-warn-700", text:"text-warn-700", chipBg:"bg-warn-50", chipText:"text-warn-700", chipBorder:"border-warn-200" },
+  urgent_medium: { solid:"bg-gold-500 hover:bg-gold-600", text:"text-gold-600", chipBg:"bg-gold-50", chipText:"text-gold-600", chipBorder:"border-gold-400/40" },
+  ai: { solid:"bg-ai-600 hover:bg-ai-700", text:"text-ai-700", chipBg:"bg-ai-50", chipText:"text-ai-700", chipBorder:"border-ai-200", soft:"bg-ai-50" },
 };
 
 // ─── Initial Data ─────────────────────────────────────────────────────────────
@@ -44,13 +42,12 @@ const INIT_MISSING = [
   { id:105, type:"missing",      hoTen:"Cháu Lê Thị Ngọc Anh",     tuoi:"6 tuổi",  gioiTinh:"Nữ",  danhTich:"Bé gái tóc dài buộc 2 bên, mặc váy hồng có nơ, mang ba lô màu tím hình thỏ", trangPhuc:"Váy hồng có nơ, ba lô tím hình thỏ, giày trắng", lanCuoiThay:"Siêu thị Vincom Mega Mall, TP.Thủ Đức", thoiGian:"15:30 ngày 18/05/2026", date:"18/05/2026", contact:"0933 999 000", reward:"3.000.000đ", tieuChuan:"Bị thất lạc tại tầng 3 khu vực đồ chơi.", avatar:"👧", urgency:"high", img:null },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers (không đổi logic) ─────────────────────────────────────────────────
 const fmtDate = () => new Date().toLocaleDateString("vi-VN");
 const uid = () => Date.now() + Math.random();
 const ITEM_CAT = ["CMND/CCCD","Bằng lái xe","Hộ chiếu","Ví/Túi xách","Chìa khóa","Điện thoại","Khác"];
 const catIcon = c => ({ "CMND/CCCD":"🪪","Bằng lái xe":"🪪","Hộ chiếu":"📘","Ví/Túi xách":"👛","Chìa khóa":"🔑","Điện thoại":"📱","Khác":"📦" }[c]||"📦");
 const SENSITIVE_CATS = ["CMND/CCCD","Bằng lái xe","Hộ chiếu"];
-// Chuẩn hóa loại giấy tờ (AI có thể trả "CCCD", "Căn cước công dân", "GPLX"...) về đúng danh mục
 const normalizeCategory = (raw) => {
   const s = String(raw || "").trim();
   if (!s) return "";
@@ -60,12 +57,10 @@ const normalizeCategory = (raw) => {
   if (/hộ chiếu|ho chieu|passport/.test(l)) return "Hộ chiếu";
   return s;
 };
-// Loại giấy tờ từ AI -> danh mục có trong ITEM_CAT (không khớp thì đưa vào "Khác")
 const docCategory = (raw) => {
   const c = normalizeCategory(raw);
   return ITEM_CAT.includes(c) ? c : "Khác";
 };
-// Tin nhạy cảm nếu thuộc loại giấy tờ HOẶC có số giấy tờ (bắt cả tin cũ bị sai loại)
 const isSensitive = item =>
   SENSITIVE_CATS.includes(normalizeCategory(item.category)) ||
   !!(item.soGiayTo && String(item.soGiayTo).trim());
@@ -73,8 +68,6 @@ const privateTitle = item => {
   if (!isSensitive(item)) return item.title;
   return `${normalizeCategory(item.category) || "Giấy tờ"} — ${item.type==="found"?"Đã nhặt được":"Đang tìm"}`;
 };
-
-// Che thông tin nhạy cảm — chỉ hiện khi xác minh
 const maskID = (id) => {
   if (!id) return "";
   if (id.length <= 3) return id;
@@ -82,26 +75,31 @@ const maskID = (id) => {
 };
 const maskDate = (date) => {
   if (!date) return "";
-  // Chỉ hiện tháng và năm, che ngày
   const parts = date.split("/");
   if (parts.length === 3) return `**/${parts[1]}/${parts[2]}`;
   return "**/**/****";
 };
 const maskAddress = (addr) => {
   if (!addr) return "";
-  // Chỉ hiện tỉnh/thành phố cuối
   const parts = addr.split(",");
   if (parts.length > 1) return `***, ${parts[parts.length-1].trim()}`;
   return addr.slice(0, 3) + "***";
 };
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const S = {
-  overlay: { position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:400, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"20px 16px", overflowY:"auto" },
-  box: { background:C.bg2, border:`1.5px solid ${C.border}`, borderRadius:20, padding:28, width:"100%", position:"relative", marginTop:"auto", marginBottom:"auto" },
-  btn: (bg,color="#fff") => ({ background:bg, border:"none", borderRadius:12, padding:"13px 18px", color, fontWeight:800, fontSize:15, cursor:"pointer", width:"100%", transition:"opacity 0.2s" }),
-  input: { width:"100%", boxSizing:"border-box", padding:"11px 13px", background:C.bg3, border:`1.5px solid ${C.border2}`, borderRadius:10, color:C.text, fontSize:14, outline:"none", fontFamily:"inherit" },
-};
+// ─── Shared class fragments ────────────────────────────────────────────────────
+const inputCls = "w-full box-border px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 text-[14px] outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition";
+const cardCls = "bg-white border border-slate-200 rounded-2xl";
+function btnCls(tone="brand", extra="") {
+  const tones = {
+    brand: "bg-brand-600 hover:bg-brand-700 text-white",
+    found: "bg-ok-500 hover:bg-ok-600 text-white",
+    warn:  "bg-warn-600 hover:bg-warn-700 text-white",
+    ai:    "bg-ai-600 hover:bg-ai-700 text-white",
+    ghost: "bg-slate-100 hover:bg-slate-200 text-slate-700",
+    outline: "bg-white hover:bg-slate-50 text-slate-700 border border-slate-300",
+  };
+  return `w-full border-none rounded-xl px-4 py-3 font-extrabold text-[15px] cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed ${tones[tone]||tones.brand} ${extra}`;
+}
 
 // ─── Primitive Components ─────────────────────────────────────────────────────
 function Overlay({ onClose, children }) {
@@ -110,13 +108,17 @@ function Overlay({ onClose, children }) {
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, [onClose]);
-  return <div style={S.overlay} onClick={onClose}>{children}</div>;
+  return (
+    <div className="fixed inset-0 z-[400] bg-slate-900/60 backdrop-blur-sm flex items-start justify-center p-4 sm:p-6 overflow-y-auto" onClick={onClose}>
+      {children}
+    </div>
+  );
 }
-function Modal({ onClose, style, children }) {
+function Modal({ onClose, className="", children }) {
   return (
     <Overlay onClose={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{ ...S.box, maxWidth:520, ...style }}>
-        <button onClick={onClose} style={{ position:"absolute", top:14, right:14, background:"#222", border:"none", borderRadius:8, width:30, height:30, color:"#888", cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", zIndex:1 }}>×</button>
+      <div onClick={e=>e.stopPropagation()} className={`${cardCls} shadow-2xl p-6 sm:p-7 w-full max-w-[520px] relative my-auto ${className}`}>
+        <button onClick={onClose} aria-label="Đóng" className="absolute top-3.5 right-3.5 bg-slate-100 hover:bg-slate-200 border-none rounded-lg w-8 h-8 text-slate-500 cursor-pointer text-lg flex items-center justify-center z-10">×</button>
         {children}
       </div>
     </Overlay>
@@ -124,22 +126,22 @@ function Modal({ onClose, style, children }) {
 }
 function Field({ label, value, onChange, placeholder, type="text", multiline=false, hint, required=false }) {
   return (
-    <div style={{ marginBottom:14 }}>
-      <label style={{ display:"block", fontSize:11, color:C.text3, marginBottom:5, fontWeight:700, textTransform:"uppercase", letterSpacing:0.8 }}>
-        {label}{required && <span style={{ color:C.rose, marginLeft:3 }}>*</span>}
+    <div className="mb-3.5">
+      <label className="block text-[11px] text-slate-500 mb-1.5 font-bold uppercase tracking-wide">
+        {label}{required && <span className="text-warn-600 ml-0.5">*</span>}
       </label>
       {multiline
-        ? <textarea rows={3} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{ ...S.input, resize:"vertical" }}/>
-        : <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={S.input}/>}
-      {hint && <div style={{ fontSize:11, color:"#444", marginTop:4 }}>💡 {hint}</div>}
+        ? <textarea rows={3} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} className={`${inputCls} resize-y`}/>
+        : <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} className={inputCls}/>}
+      {hint && <div className="text-[11px] text-slate-400 mt-1">💡 {hint}</div>}
     </div>
   );
 }
 function Select({ label, value, onChange, options }) {
   return (
-    <div style={{ marginBottom:14 }}>
-      <label style={{ display:"block", fontSize:11, color:C.text3, marginBottom:5, fontWeight:700, textTransform:"uppercase", letterSpacing:0.8 }}>{label}</label>
-      <select value={value} onChange={e=>onChange(e.target.value)} style={{ ...S.input, cursor:"pointer" }}>
+    <div className="mb-3.5">
+      <label className="block text-[11px] text-slate-500 mb-1.5 font-bold uppercase tracking-wide">{label}</label>
+      <select value={value} onChange={e=>onChange(e.target.value)} className={`${inputCls} cursor-pointer`}>
         {options.map(o => Array.isArray(o) ? <option key={o[0]} value={o[0]}>{o[1]}</option> : <option key={o}>{o}</option>)}
       </select>
     </div>
@@ -147,35 +149,35 @@ function Select({ label, value, onChange, options }) {
 }
 function InfoRow({ label, value }) {
   if (!value) return null;
-  return <div style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:`1px solid ${C.border}`, gap:12 }}>
-    <span style={{ color:C.text3, fontSize:12, flexShrink:0 }}>{label}</span>
-    <span style={{ fontSize:13, fontWeight:600, textAlign:"right", color:C.text }}>{value}</span>
-  </div>;
+  return (
+    <div className="flex justify-between gap-3 py-1.5 border-b border-slate-100 last:border-0">
+      <span className="text-slate-400 text-xs shrink-0">{label}</span>
+      <span className="text-[13px] font-semibold text-right text-slate-800">{value}</span>
+    </div>
+  );
 }
-function Chip({ text, color, bg }) {
-  return <span style={{ display:"inline-flex", alignItems:"center", background:bg||`${color}18`, color, fontSize:11, fontWeight:700, letterSpacing:0.8, textTransform:"uppercase", padding:"4px 12px", borderRadius:20, border:`1px solid ${color}30` }}>{text}</span>;
+function Chip({ text, className="" }) {
+  return <span className={`inline-flex items-center text-[11px] font-bold tracking-wide uppercase px-3 py-1 rounded-full border ${className}`}>{text}</span>;
 }
-function SectionTitle({ icon, text, color }) {
-  return <div style={{ fontSize:11, color:color||C.violet, fontWeight:700, textTransform:"uppercase", letterSpacing:1.2, marginBottom:12, display:"flex", alignItems:"center", gap:6 }}><span>{icon}</span>{text}</div>;
+function SectionTitle({ icon, text, className="text-ai-600" }) {
+  return <div className={`text-[11px] font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5 ${className}`}><span>{icon}</span>{text}</div>;
 }
 function Empty({ icon, text }) {
-  return <div style={{ textAlign:"center", padding:"60px 0" }}>
-    <div style={{ fontSize:48, marginBottom:12, filter:"grayscale(1)" }}>{icon}</div>
-    <div style={{ fontSize:16, fontWeight:700, color:"#444" }}>{text}</div>
-  </div>;
+  return (
+    <div className="text-center py-16">
+      <div className="text-5xl mb-3 grayscale opacity-60">{icon}</div>
+      <div className="text-base font-bold text-slate-400">{text}</div>
+    </div>
+  );
 }
 
-// Lỗi từ database: chỉ hiện nếu là thông báo tiếng Việt do mình viết (vd. "Bạn thao tác quá nhanh...")
 const dbMsg = e => (/[àáảãạăâđêôơưìíòóùúýỳ]/i.test(e?.message || "") ? e.message : "");
 
 // ─── Claude AI qua Vercel Edge Function (tránh CORS) ────────────────────────
-// Vercel tự động làm proxy an toàn, không lộ API key
 const AI_PROXY = "/api/ai";
 
-// Ảnh chụp từ điện thoại thường 3-8MB; máy chủ Vercel chỉ nhận yêu cầu dưới ~4MB (lỗi 413).
-// Vì vậy thu nhỏ ảnh về tối đa 1600 điểm ảnh/JPEG trước khi gửi cho AI (chữ trên giấy tờ vẫn đọc rõ).
 async function shrinkB64(b64, mime) {
-  if (!b64 || b64.length < 900000) return { b64, mime };   // ảnh đã nhỏ (< ~650KB) thì gửi nguyên
+  if (!b64 || b64.length < 900000) return { b64, mime };
   try {
     const src = `data:${mime || "image/jpeg"};base64,${b64}`;
     for (const [side, q] of [[1600, 0.85], [1400, 0.75], [1100, 0.7]]) {
@@ -190,7 +192,6 @@ async function callGemini(prompt, b64Image = null, mimeType = "image/jpeg") {
   const content = [];
   if (b64Image) {
     ({ b64: b64Image, mime: mimeType } = await shrinkB64(b64Image, mimeType));
-    // Tự detect mime type từ base64 header
     let detectedMime = mimeType;
     if (b64Image.startsWith("/9j/")) detectedMime = "image/jpeg";
     else if (b64Image.startsWith("iVBOR")) detectedMime = "image/png";
@@ -225,12 +226,10 @@ async function callGemini(prompt, b64Image = null, mimeType = "image/jpeg") {
   let raw = (data.text || "").trim();
   if (!raw) throw new Error("AI không trả về nội dung. Thử ảnh khác hoặc thử lại.");
 
-  // Xóa markdown code block nếu có
   raw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 
   try { return JSON.parse(raw); }
   catch {
-    // Tìm JSON object trong text
     const match = raw.match(/\{[\s\S]*\}/);
     if (match) {
       try { return JSON.parse(match[0]); }
@@ -253,9 +252,11 @@ function useImagePicker(onPicked) {
     };
     r.readAsDataURL(file);
   }, [onPicked]);
-  const inputEl = <input ref={ref} type="file" accept="image/*" style={{ display:"none" }} onChange={e=>handle(e.target.files[0])}/>;
+  const inputEl = <input ref={ref} type="file" accept="image/*" className="hidden" onChange={e=>handle(e.target.files[0])}/>;
   return { pick, inputEl, handleDrop: useCallback(e=>{e.preventDefault();handle(e.dataTransfer.files[0]);}, [handle]) };
-}// ─── AI Doc Scanner Modal ─────────────────────────────────────────────────────
+}
+
+// ─── AI Doc Scanner Modal ─────────────────────────────────────────────────────
 function DocScanModal({ onClose, onFill }) {
   const [phase, setPhase] = useState("idle");
   const [preview, setPreview] = useState(null);
@@ -282,36 +283,36 @@ Không được bịa thông tin, chỉ điền những gì đọc được rõ 
   };
 
   return (
-    <Modal onClose={onClose} style={{ maxWidth:480 }}>
+    <Modal onClose={onClose} className="max-w-[480px]">
       {inputEl}
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:22 }}>
-        <div style={{ width:44, height:44, borderRadius:12, background:`linear-gradient(135deg,${C.violet},${C.violetDark})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>🤖</div>
-        <div><div style={{ fontWeight:800, fontSize:18 }}>AI Đọc Giấy Tờ</div><div style={{ fontSize:12, color:C.text3 }}>Tải ảnh → AI trích xuất thông tin tự động</div></div>
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-11 h-11 rounded-xl bg-ai-600 flex items-center justify-center text-[22px] shrink-0">🤖</div>
+        <div><div className="font-extrabold text-lg text-slate-900">AI Đọc Giấy Tờ</div><div className="text-xs text-slate-400">Tải ảnh → AI trích xuất thông tin tự động</div></div>
       </div>
       <div onDragOver={e=>e.preventDefault()} onDrop={handleDrop} onClick={pick}
-        style={{ border:`2px dashed ${preview?C.violet:C.border2}`, borderRadius:14, padding:preview?"8px":"30px 20px", textAlign:"center", cursor:"pointer", background:preview?`${C.violet}08`:C.bg, marginBottom:14, minHeight:120, display:"flex", alignItems:"center", justifyContent:"center" }}>
-        {preview ? <img src={preview} alt="" style={{ maxHeight:200, maxWidth:"100%", borderRadius:10, objectFit:"contain" }}/>
-          : <div><div style={{ fontSize:40, marginBottom:10 }}>📷</div><div style={{ fontWeight:700, fontSize:15 }}>Kéo thả hoặc bấm chọn ảnh</div><div style={{ fontSize:12, color:C.text3, marginTop:4 }}>CCCD · Bằng lái · Hộ chiếu · Thẻ BHYT…</div></div>}
+        className={`border-2 border-dashed rounded-2xl text-center cursor-pointer mb-3.5 min-h-[120px] flex items-center justify-center ${preview ? "p-2 border-ai-500 bg-ai-50" : "p-8 border-slate-300 bg-slate-50 hover:bg-slate-100"}`}>
+        {preview ? <img src={preview} alt="" className="max-h-[200px] max-w-full rounded-xl object-contain"/>
+          : <div><div className="text-4xl mb-2.5">📷</div><div className="font-bold text-[15px] text-slate-700">Kéo thả hoặc bấm chọn ảnh</div><div className="text-xs text-slate-400 mt-1">CCCD · Bằng lái · Hộ chiếu · Thẻ BHYT…</div></div>}
       </div>
-      {preview && phase!=="scanning" && <button onClick={pick} style={{ background:"transparent", border:`1px solid ${C.border2}`, borderRadius:8, padding:"5px 12px", color:C.text3, fontSize:12, cursor:"pointer", marginBottom:12 }}>🔄 Đổi ảnh khác</button>}
-      {err && <div style={{ background:"rgba(255,80,80,0.08)", border:"1px solid rgba(255,80,80,0.25)", borderRadius:10, padding:"10px 14px", marginBottom:12, color:"#FF7070", fontSize:13 }}>⚠️ {err}</div>}
-      {phase==="scanning" && <div style={{ textAlign:"center", padding:"32px 0" }}>
-        <div style={{ fontSize:44, marginBottom:12, display:"inline-block", animation:"spin 1.2s linear infinite" }}>🔄</div>
-        <div style={{ fontWeight:700 }}>AI đang phân tích giấy tờ…</div>
+      {preview && phase!=="scanning" && <button onClick={pick} className="bg-transparent border border-slate-300 rounded-lg px-3 py-1.5 text-slate-500 text-xs cursor-pointer mb-3">🔄 Đổi ảnh khác</button>}
+      {err && <div className="bg-warn-50 border border-warn-200 rounded-lg px-3.5 py-2.5 mb-3 text-warn-700 text-[13px]">⚠️ {err}</div>}
+      {phase==="scanning" && <div className="text-center py-8">
+        <div className="text-4xl mb-3 inline-block animate-spin">🔄</div>
+        <div className="font-bold text-slate-700">AI đang phân tích giấy tờ…</div>
       </div>}
-      {phase==="done" && result && <div style={{ marginBottom:16 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-          <span style={{ fontSize:18 }}>✅</span><span style={{ fontWeight:700 }}>Nhận diện thành công</span>
-          <Chip text={`${result.doTinCay||90}% chính xác`} color={C.teal}/>
+      {phase==="done" && result && <div className="mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-lg">✅</span><span className="font-bold text-slate-900">Nhận diện thành công</span>
+          <Chip text={`${result.doTinCay||90}% chính xác`} className="bg-ok-50 text-ok-700 border-ok-200"/>
         </div>
-        <div style={{ background:C.bg, borderRadius:12, padding:"12px 14px" }}>
+        <div className="bg-slate-50 rounded-xl px-3.5 py-3">
           {[["Loại giấy tờ",result.loaiGiayTo],["Họ và tên",result.hoTen],["Số giấy tờ",result.soGiayTo],["Ngày sinh",result.ngaySinh],["Giới tính",result.gioiTinh],["Quê quán",result.queQuan],["Địa chỉ",result.diaChiThuongTru],["Ngày cấp",result.ngayCap],["Nơi cấp",result.noiCap]].map(([k,v])=><InfoRow key={k} label={k} value={v}/>)}
         </div>
       </div>}
       {phase!=="scanning" && (
         phase==="done"
-          ? <button onClick={()=>{onFill(result,preview);onClose();}} style={S.btn(`linear-gradient(135deg,${C.accent},${C.accentDark})`)}>Dùng thông tin này để đăng tin →</button>
-          : <button onClick={scan} disabled={!preview} style={S.btn(preview?`linear-gradient(135deg,${C.violet},${C.violetDark})`:"#222", preview?"#fff":"#555")}>✨ {err?"Thử lại":"Nhận diện ngay"}</button>
+          ? <button onClick={()=>{onFill(result,preview);onClose();}} className={btnCls("found")}>Dùng thông tin này để đăng tin →</button>
+          : <button onClick={scan} disabled={!preview} className={btnCls("ai")}>✨ {err?"Thử lại":"Nhận diện ngay"}</button>
       )}
     </Modal>
   );
@@ -327,14 +328,13 @@ const newUuid = () => {
   return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
 };
 const FACE_LEVELS = {
-  rat_giong: { label:"Rất giống khuôn mặt", color:C.gold },
-  kha_giong: { label:"Khá giống khuôn mặt", color:C.teal },
-  co_the:    { label:"Có thể giống khuôn mặt", color:C.violet },
-  trung_ten: { label:"Trùng họ tên", color:C.text3 },
+  rat_giong: { label:"Rất giống khuôn mặt", cls:"text-gold-600" },
+  kha_giong: { label:"Khá giống khuôn mặt", cls:"text-ok-600" },
+  co_the:    { label:"Có thể giống khuôn mặt", cls:"text-ai-600" },
+  trung_ten: { label:"Trùng họ tên", cls:"text-slate-400" },
 };
 
 // ─── CAPTCHA (Cloudflare Turnstile) ──────────────────────────────────────────
-// Site Key công khai, không cần giữ bí mật (Secret Key nằm ở máy chủ, trong biến môi trường Vercel)
 const TURNSTILE_SITE_KEY = "0x4AAAAAAFPKIkAj5JrUYC3Y";
 function useTurnstile() {
   const [token, setToken] = useState("");
@@ -376,20 +376,20 @@ function useTurnstile() {
   return { elRef, token, reset };
 }
 function CaptchaBox({ elRef }) {
-  return <div style={{ margin:"4px 0 14px", display:"flex", justifyContent:"center" }}><div ref={elRef}/></div>;
+  return <div className="turnstile-box my-1 mb-3.5"><div ref={elRef}/></div>;
 }
 
 function PrivacyModal({ onClose }) {
   const Sec = ({ title, children }) => (
-    <div style={{ marginBottom:20 }}>
-      <div style={{ fontWeight:800, fontSize:14, color:C.heroAccent, marginBottom:8 }}>{title}</div>
-      <div style={{ fontSize:13, color:C.text2, lineHeight:1.75 }}>{children}</div>
+    <div className="mb-5">
+      <div className="font-extrabold text-sm text-warn-600 mb-2">{title}</div>
+      <div className="text-[13px] text-slate-600 leading-relaxed">{children}</div>
     </div>
   );
   return (
-    <Modal onClose={onClose} style={{ maxWidth:680, maxHeight:"88vh", overflowY:"auto" }}>
-      <div style={{ fontWeight:900, fontSize:20, marginBottom:4 }}>🔒 Chính sách quyền riêng tư</div>
-      <div style={{ fontSize:12, color:C.text3, marginBottom:20 }}>Cập nhật lần cuối: 28/09/2026 · Áp dụng theo Luật Bảo vệ dữ liệu cá nhân (hiệu lực từ 01/01/2026)</div>
+    <Modal onClose={onClose} className="max-w-[680px] max-h-[88vh] overflow-y-auto">
+      <div className="font-black text-xl text-slate-900 mb-1">🔒 Chính sách quyền riêng tư</div>
+      <div className="text-xs text-slate-400 mb-5">Cập nhật lần cuối: 28/09/2026 · Áp dụng theo Luật Bảo vệ dữ liệu cá nhân (hiệu lực từ 01/01/2026)</div>
 
       <Sec title="1. TìmĐồ.vn là gì">
         TìmĐồ.vn là một dự án cộng đồng, hiện do một cá nhân xây dựng và vận hành (chưa phải pháp nhân/doanh nghiệp), giúp kết nối người thất lạc đồ vật / người thân với người có thể đã nhặt được / gặp được. Vì đang trong giai đoạn thử nghiệm, chính sách này có thể được cập nhật khi hệ thống hoàn thiện thêm.
@@ -447,42 +447,41 @@ function PersonMatchCard({ m }) {
   const url = photoUrl(m.photo_path);
   const isFound = m.type === "found_person";
   return (
-    <div style={{ background:C.bg3, border:`1.5px solid ${lv.color}66`, borderRadius:14, padding:"12px 14px", marginBottom:10 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:10, flexWrap:"wrap" }}>
-        <span style={{ fontWeight:800, fontSize:13, color:lv.color }}>{lv.label}</span>
-        <span style={{ fontSize:11, color:C.text3 }}>{isFound ? "Có người đã gặp người này" : "Gia đình đang tìm người này"}</span>
+    <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 mb-2.5">
+      <div className="flex justify-between items-center gap-2 mb-2.5 flex-wrap">
+        <span className={`font-extrabold text-[13px] ${lv.cls}`}>{lv.label}</span>
+        <span className="text-xs text-slate-400">{isFound ? "Có người đã gặp người này" : "Gia đình đang tìm người này"}</span>
       </div>
-      <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:10 }}>
-        <div style={{ width:60, height:60, borderRadius:12, background:C.bg, overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, flexShrink:0 }}>
-          {url ? <img src={url} alt="" onError={e=>{e.currentTarget.style.display="none";}} style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : (isFound ? "🟢" : "🔴")}
+      <div className="flex gap-3 items-center mb-2.5">
+        <div className="w-15 h-15 w-[60px] h-[60px] rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center text-[28px] shrink-0">
+          {url ? <img src={url} alt="" onError={e=>{e.currentTarget.style.display="none";}} className="w-full h-full object-cover"/> : (isFound ? "🟢" : "🟠")}
         </div>
-        <div style={{ minWidth:0 }}>
-          <div style={{ fontWeight:800, fontSize:15 }}>{m.ho_ten}</div>
-          <div style={{ fontSize:12, color:C.text3 }}>{[m.tuoi, m.gioi_tinh].filter(Boolean).join(" · ")}</div>
-          <div style={{ fontSize:12, color:C.text3 }}>📍 {m.lan_cuoi_thay}{m.thoi_gian ? ` · ${m.thoi_gian}` : ""}</div>
-          <div style={{ fontSize:11, color:C.text3 }}>📅 Đăng ngày {m.date}</div>
+        <div className="min-w-0">
+          <div className="font-extrabold text-[15px] text-slate-900">{m.ho_ten}</div>
+          <div className="text-xs text-slate-400">{[m.tuoi, m.gioi_tinh].filter(Boolean).join(" · ")}</div>
+          <div className="text-xs text-slate-400">📍 {m.lan_cuoi_thay}{m.thoi_gian ? ` · ${m.thoi_gian}` : ""}</div>
+          <div className="text-[11px] text-slate-400">📅 Đăng ngày {m.date}</div>
         </div>
       </div>
-      {m.level === "trung_ten" && <div style={{ fontSize:11, color:C.text3, marginBottom:8 }}>Cùng họ tên nhưng chưa có ảnh để so khuôn mặt — hãy hỏi thêm để xác minh.</div>}
-      {m.reward && !isFound && <div style={{ fontSize:12, color:C.gold, marginBottom:8 }}>🏆 Tiền thưởng: {m.reward}</div>}
-      <a href={`tel:${String(m.contact||"").replace(/[^\d+]/g,"")}`} style={{ display:"block", textAlign:"center", background:`linear-gradient(135deg,${C.rose},${C.roseDark})`, borderRadius:10, padding:"11px", color:"#fff", fontWeight:800, fontSize:14, textDecoration:"none" }}>📞 Gọi {m.contact}</a>
+      {m.level === "trung_ten" && <div className="text-[11px] text-slate-400 mb-2">Cùng họ tên nhưng chưa có ảnh để so khuôn mặt — hãy hỏi thêm để xác minh.</div>}
+      {m.reward && !isFound && <div className="text-xs text-gold-600 mb-2">🏆 Tiền thưởng: {m.reward}</div>}
+      <a href={`tel:${String(m.contact||"").replace(/[^\d+]/g,"")}`} className="block text-center bg-warn-600 hover:bg-warn-700 rounded-lg py-2.5 text-white font-extrabold text-sm no-underline transition">📞 Gọi {m.contact}</a>
     </div>
   );
 }
 
 const FACE_DISCLAIMER = "Đây là gợi ý tự động dựa trên khuôn mặt, có thể sai. Hãy gọi điện và hỏi thêm thông tin (nốt ruồi, sẹo, nơi ở…) trước khi kết luận. Nếu người lạc là trẻ em hoặc người già cần giúp đỡ, hãy báo công an/UBND phường gần nhất.";
 
-// Kết quả dò người khớp ngay sau khi đăng tin
 function PersonMatchResult({ matches, onClose }) {
   return (
     <div>
-      <div style={{ textAlign:"center", marginBottom:16 }}>
-        <div style={{ fontSize:48, marginBottom:8 }}>🔔</div>
-        <div style={{ fontWeight:900, fontSize:20, marginBottom:6 }}>Tin đã đăng — có {matches.length} tin có thể khớp!</div>
-        <div style={{ fontSize:12, color:C.text3, lineHeight:1.6 }}>{FACE_DISCLAIMER}</div>
+      <div className="text-center mb-4">
+        <div className="text-5xl mb-2">🔔</div>
+        <div className="font-black text-xl text-slate-900 mb-1.5">Tin đã đăng — có {matches.length} tin có thể khớp!</div>
+        <div className="text-xs text-slate-400 leading-relaxed">{FACE_DISCLAIMER}</div>
       </div>
       {matches.map(m => <PersonMatchCard key={m.id} m={m}/>)}
-      <button onClick={onClose} style={{ ...S.btn(C.bg3, C.text2), marginTop:6 }}>Đóng</button>
+      <button onClick={onClose} className={btnCls("ghost", "mt-1.5")}>Đóng</button>
     </div>
   );
 }
@@ -490,11 +489,11 @@ function PersonMatchResult({ matches, onClose }) {
 // ─── Tìm người bằng ảnh khuôn mặt ────────────────────────────────────────────
 function FaceMatchModal({ onClose, missing }) {
   const [preview, setPreview] = useState(null);
-  const [phase, setPhase] = useState("idle");   // idle | analyzing | ready | noface | searching | done | error
+  const [phase, setPhase] = useState("idle");
   const [face, setFace] = useState(null);
   const [warn, setWarn] = useState("");
   const [err, setErr] = useState("");
-  const [scope, setScope] = useState("");       // "" = tất cả, "missing", "found_person"
+  const [scope, setScope] = useState("");
   const [results, setResults] = useState(null);
   const token = useRef(0);
   const { elRef: captchaEl, token: captchaToken, reset: resetCaptcha } = useTurnstile();
@@ -526,47 +525,47 @@ function FaceMatchModal({ onClose, missing }) {
   const total = (missing || []).length;
 
   return (
-    <Modal onClose={onClose} style={{ maxWidth:500, maxHeight:"92vh", overflowY:"auto" }}>
+    <Modal onClose={onClose} className="max-w-[500px] max-h-[92vh] overflow-y-auto">
       {inputEl}
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:18 }}>
-        <div style={{ width:44, height:44, borderRadius:12, background:`linear-gradient(135deg,${C.rose},${C.roseDark})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>🔎</div>
-        <div><div style={{ fontWeight:800, fontSize:18 }}>Tìm người bằng khuôn mặt</div><div style={{ fontSize:12, color:C.text3 }}>So khuôn mặt — không phụ thuộc quần áo{total ? ` · ${total} hồ sơ đang tìm` : ""}</div></div>
+      <div className="flex items-center gap-3 mb-4.5 mb-5">
+        <div className="w-11 h-11 rounded-xl bg-warn-600 flex items-center justify-center text-[22px] shrink-0">🔎</div>
+        <div><div className="font-extrabold text-lg text-slate-900">Tìm người bằng khuôn mặt</div><div className="text-xs text-slate-400">So khuôn mặt — không phụ thuộc quần áo{total ? ` · ${total} hồ sơ đang tìm` : ""}</div></div>
       </div>
-      <div style={{ background:`${C.rose}0A`, border:`1px solid ${C.rose}25`, borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:"#FF9AB9", lineHeight:1.6 }}>
+      <div className="bg-warn-50 border border-warn-200 rounded-lg px-3.5 py-2.5 mb-3.5 text-xs text-warn-700 leading-relaxed">
         ⚠️ Kết quả chỉ là <strong>gợi ý</strong>, không đảm bảo chính xác. Luôn xác nhận qua điện thoại.<br/>
         🔒 Ảnh được xử lý ngay trên máy bạn, <strong>không tải lên</strong> và không được lưu lại.
       </div>
-      <div style={{ display:"flex", gap:4, background:C.bg, borderRadius:12, padding:4, marginBottom:14 }}>
+      <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mb-3.5">
         {[["","Tất cả"],["missing","Đang mất tích"],["found_person","Đã gặp người lạc"]].map(([v,l])=>(
-          <button key={v} onClick={()=>{ setScope(v); setResults(null); if (phase==="done") setPhase("ready"); }} style={{ flex:1, padding:"8px 6px", borderRadius:9, border:"none", background:scope===v?C.rose:"transparent", color:scope===v?"#fff":C.text3, fontWeight:700, fontSize:12, cursor:"pointer" }}>{l}</button>
+          <button key={v} onClick={()=>{ setScope(v); setResults(null); if (phase==="done") setPhase("ready"); }} className={`flex-1 py-2 px-1.5 rounded-lg border-none font-bold text-xs cursor-pointer transition ${scope===v?"bg-warn-600 text-white":"bg-transparent text-slate-500 hover:bg-slate-200"}`}>{l}</button>
         ))}
       </div>
       <div onDragOver={e=>e.preventDefault()} onDrop={handleDrop} onClick={pick}
-        style={{ border:`2px dashed ${preview?C.rose:C.border2}`, borderRadius:14, padding:preview?"8px":"30px 20px", textAlign:"center", cursor:"pointer", background:preview?`${C.rose}05`:C.bg, marginBottom:12, minHeight:120, display:"flex", alignItems:"center", justifyContent:"center" }}>
-        {preview ? <img src={preview} alt="" style={{ maxHeight:200, maxWidth:"100%", borderRadius:10, objectFit:"contain" }}/>
-          : <div><div style={{ fontSize:40, marginBottom:10 }}>👤</div><div style={{ fontWeight:700, fontSize:15 }}>Tải ảnh người cần đối chiếu</div><div style={{ fontSize:12, color:C.text3, marginTop:4 }}>Ảnh rõ mặt, nhìn thẳng cho kết quả tốt nhất</div></div>}
+        className={`border-2 border-dashed rounded-2xl text-center cursor-pointer mb-3 min-h-[120px] flex items-center justify-center ${preview ? "p-2 border-warn-500 bg-warn-50" : "p-8 border-slate-300 bg-slate-50 hover:bg-slate-100"}`}>
+        {preview ? <img src={preview} alt="" className="max-h-[200px] max-w-full rounded-xl object-contain"/>
+          : <div><div className="text-4xl mb-2.5">👤</div><div className="font-bold text-[15px] text-slate-700">Tải ảnh người cần đối chiếu</div><div className="text-xs text-slate-400 mt-1">Ảnh rõ mặt, nhìn thẳng cho kết quả tốt nhất</div></div>}
       </div>
-      {preview && phase!=="analyzing" && phase!=="searching" && <button onClick={pick} style={{ background:"transparent", border:`1px solid ${C.border2}`, borderRadius:8, padding:"5px 12px", color:C.text3, fontSize:12, cursor:"pointer", marginBottom:12 }}>🔄 Đổi ảnh</button>}
-      {phase==="analyzing" && <div style={{ textAlign:"center", padding:"14px 0", color:C.text2, fontSize:13 }}><span style={{ display:"inline-block", animation:"spin 1.2s linear infinite", marginRight:8 }}>🔄</span>Đang phân tích khuôn mặt… (lần đầu có thể mất vài giây)</div>}
-      {phase==="noface" && <div style={{ background:"rgba(255,80,80,0.08)", border:"1px solid rgba(255,80,80,0.25)", borderRadius:10, padding:"10px 14px", marginBottom:12, color:"#FF7070", fontSize:13 }}>⚠️ Không thấy khuôn mặt rõ trong ảnh. Hãy thử ảnh chụp rõ mặt, đủ sáng, nhìn thẳng.</div>}
-      {err && <div style={{ background:"rgba(255,80,80,0.08)", border:"1px solid rgba(255,80,80,0.25)", borderRadius:10, padding:"10px 14px", marginBottom:12, color:"#FF7070", fontSize:13 }}>⚠️ {err}</div>}
-      {warn && (phase==="ready"||phase==="done") && <div style={{ fontSize:12, color:C.gold, marginBottom:12 }}>ℹ️ {warn}</div>}
-      {phase==="searching" && <div style={{ textAlign:"center", padding:"20px 0" }}><div style={{ fontSize:38, display:"inline-block", animation:"spin 1.2s linear infinite" }}>🔄</div><div style={{ fontWeight:700, marginTop:8 }}>Đang so khớp…</div></div>}
+      {preview && phase!=="analyzing" && phase!=="searching" && <button onClick={pick} className="bg-transparent border border-slate-300 rounded-lg px-3 py-1.5 text-slate-500 text-xs cursor-pointer mb-3">🔄 Đổi ảnh</button>}
+      {phase==="analyzing" && <div className="text-center py-3.5 text-slate-600 text-[13px]"><span className="inline-block animate-spin mr-2">🔄</span>Đang phân tích khuôn mặt… (lần đầu có thể mất vài giây)</div>}
+      {phase==="noface" && <div className="bg-warn-50 border border-warn-200 rounded-lg px-3.5 py-2.5 mb-3 text-warn-700 text-[13px]">⚠️ Không thấy khuôn mặt rõ trong ảnh. Hãy thử ảnh chụp rõ mặt, đủ sáng, nhìn thẳng.</div>}
+      {err && <div className="bg-warn-50 border border-warn-200 rounded-lg px-3.5 py-2.5 mb-3 text-warn-700 text-[13px]">⚠️ {err}</div>}
+      {warn && (phase==="ready"||phase==="done") && <div className="text-xs text-gold-600 mb-3">ℹ️ {warn}</div>}
+      {phase==="searching" && <div className="text-center py-5"><div className="text-[38px] inline-block animate-spin">🔄</div><div className="font-bold mt-2 text-slate-700">Đang so khớp…</div></div>}
       {phase==="done" && results && (results.length ? <>
-        <div style={{ fontWeight:800, fontSize:15, marginBottom:10 }}>⚡ Tìm thấy {results.length} hồ sơ có khuôn mặt giống</div>
+        <div className="font-extrabold text-[15px] mb-2.5 text-slate-900">⚡ Tìm thấy {results.length} hồ sơ có khuôn mặt giống</div>
         {results.map(m => <PersonMatchCard key={m.id} m={m}/>)}
-        <div style={{ fontSize:11, color:C.text3, lineHeight:1.6, margin:"4px 0 12px" }}>{FACE_DISCLAIMER}</div>
+        <div className="text-[11px] text-slate-400 leading-relaxed my-1 mb-3">{FACE_DISCLAIMER}</div>
       </> : (
-        <div style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${C.border}`, borderRadius:12, padding:"18px 16px", marginBottom:14, textAlign:"center" }}>
-          <div style={{ fontSize:32, marginBottom:8 }}>🔍</div>
-          <div style={{ fontWeight:700, fontSize:15, marginBottom:4 }}>Chưa có hồ sơ nào có khuôn mặt giống</div>
-          <div style={{ fontSize:13, color:C.text3, lineHeight:1.6 }}>Hãy <strong>đăng tin kèm ảnh</strong> — khi sau này có người đăng tin về đúng người này, hệ thống sẽ hiện ngay số liên hệ của bạn cho họ.</div>
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-4.5 mb-3.5 text-center">
+          <div className="text-3xl mb-2">🔍</div>
+          <div className="font-bold text-[15px] mb-1 text-slate-900">Chưa có hồ sơ nào có khuôn mặt giống</div>
+          <div className="text-[13px] text-slate-500 leading-relaxed">Hãy <strong>đăng tin kèm ảnh</strong> — khi sau này có người đăng tin về đúng người này, hệ thống sẽ hiện ngay số liên hệ của bạn cho họ.</div>
         </div>
       ))}
-      {phase==="done" && <button onClick={reset} style={{ ...S.btn("#222","#aaa"), width:"auto", padding:"9px 18px", fontSize:13 }}>← Đối chiếu ảnh khác</button>}
+      {phase==="done" && <button onClick={reset} className="bg-slate-100 hover:bg-slate-200 text-slate-600 border-none rounded-xl w-auto px-4.5 py-2 text-[13px] cursor-pointer font-bold">← Đối chiếu ảnh khác</button>}
       {(phase==="ready"||phase==="error") && face && <CaptchaBox elRef={captchaEl}/>}
-      {(phase==="ready"||phase==="error") && face && <button onClick={search} disabled={!captchaToken} style={{ ...S.btn(`linear-gradient(135deg,${C.rose},${C.roseDark})`), opacity:captchaToken?1:0.55 }}>🔎 Tìm người giống khuôn mặt này</button>}
-      {!preview && <button disabled style={S.btn("#1C1C1C","#444")}>🔎 Chọn ảnh trước</button>}
+      {(phase==="ready"||phase==="error") && face && <button onClick={search} disabled={!captchaToken} className={btnCls("warn")}>🔎 Tìm người giống khuôn mặt này</button>}
+      {!preview && <button disabled className={btnCls("ghost")}>🔎 Chọn ảnh trước</button>}
     </Modal>
   );
 }
@@ -575,23 +574,23 @@ function FaceMatchModal({ onClose, missing }) {
 function MatchResult({ matches, onClose }) {
   return (
     <div>
-      <div style={{ textAlign:"center", marginBottom:16 }}>
-        <div style={{ fontSize:48, marginBottom:8 }}>🔔</div>
-        <div style={{ fontWeight:900, fontSize:20, marginBottom:6 }}>Tin đã đăng — có {matches.length} tin có thể khớp!</div>
-        <div style={{ fontSize:13, color:C.text3, lineHeight:1.5 }}>Hãy gọi điện để xác minh. Giấy tờ chỉ nên trao khi đối chiếu đúng thông tin.</div>
+      <div className="text-center mb-4">
+        <div className="text-5xl mb-2">🔔</div>
+        <div className="font-black text-xl text-slate-900 mb-1.5">Tin đã đăng — có {matches.length} tin có thể khớp!</div>
+        <div className="text-[13px] text-slate-400 leading-snug">Hãy gọi điện để xác minh. Giấy tờ chỉ nên trao khi đối chiếu đúng thông tin.</div>
       </div>
       {matches.map(m => (
-        <div key={m.id} style={{ background:C.bg3, border:`1.5px solid ${m.score>=90?C.gold:C.border2}`, borderRadius:14, padding:"12px 14px", marginBottom:10 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:6, flexWrap:"wrap" }}>
-            <span style={{ fontWeight:800, fontSize:13, color:m.score>=90?C.gold:C.teal }}>{m.reason}</span>
-            <span style={{ fontSize:11, color:C.text3 }}>{m.type==="found" ? "Người khác đã nhặt được" : "Người khác đang tìm"}</span>
+        <div key={m.id} className={`bg-slate-50 border rounded-xl px-3.5 py-3 mb-2.5 ${m.score>=90?"border-gold-400":"border-slate-200"}`}>
+          <div className="flex justify-between items-center gap-2 mb-1.5 flex-wrap">
+            <span className={`font-extrabold text-[13px] ${m.score>=90?"text-gold-600":"text-ok-600"}`}>{m.reason}</span>
+            <span className="text-xs text-slate-400">{m.type==="found" ? "Người khác đã nhặt được" : "Người khác đang tìm"}</span>
           </div>
-          <div style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>{catIcon(m.category)} {m.title || m.category}</div>
-          <div style={{ fontSize:12, color:C.text3, marginBottom:8 }}>📍 {m.location} · 📅 {m.date}</div>
-          <a href={`tel:${String(m.contact||"").replace(/[^\d+]/g,"")}`} style={{ display:"block", textAlign:"center", background:`linear-gradient(135deg,${C.accent},${C.accentDark})`, borderRadius:10, padding:"10px", color:"#fff", fontWeight:800, fontSize:14, textDecoration:"none" }}>📞 Gọi {m.contact}</a>
+          <div className="text-sm font-bold mb-1 text-slate-900">{catIcon(m.category)} {m.title || m.category}</div>
+          <div className="text-xs text-slate-400 mb-2">📍 {m.location} · 📅 {m.date}</div>
+          <a href={`tel:${String(m.contact||"").replace(/[^\d+]/g,"")}`} className="block text-center bg-ok-500 hover:bg-ok-600 rounded-lg py-2.5 text-white font-extrabold text-sm no-underline transition">📞 Gọi {m.contact}</a>
         </div>
       ))}
-      <button onClick={onClose} style={{ ...S.btn(C.bg3, C.text2), marginTop:6 }}>Đóng</button>
+      <button onClick={onClose} className={btnCls("ghost", "mt-1.5")}>Đóng</button>
     </div>
   );
 }
@@ -627,29 +626,29 @@ function PostItemModal({ onClose, onAdd }) {
     else setTimeout(onClose, 1800);
   };
   return (<>
-    <Modal onClose={onClose} style={{ maxHeight:"92vh", overflowY:"auto" }}>
-      {done && matches?.length ? <MatchResult matches={matches} onClose={onClose}/> : done ? <div style={{ textAlign:"center", padding:"50px 0" }}><div style={{ fontSize:60, marginBottom:16 }}>🎉</div><div style={{ fontWeight:900, fontSize:22, marginBottom:8 }}>Đăng tin thành công!</div></div> : <>
-        <div style={{ fontWeight:900, fontSize:20, marginBottom:20 }}>📝 Đăng tin đồ vật</div>
-        <div style={{ display:"flex", gap:4, background:C.bg, borderRadius:12, padding:4, marginBottom:20 }}>
-          {[["found","🟢 Tôi nhặt được"],["lost","🔴 Tôi bị mất"]].map(([v,l])=>(
-            <button key={v} onClick={()=>setPtype(v)} style={{ flex:1, padding:"10px", borderRadius:9, border:"none", background:ptype===v?(v==="found"?C.teal:C.accent):"transparent", color:ptype===v?"#fff":C.text3, fontWeight:700, fontSize:13, cursor:"pointer", transition:"all 0.2s" }}>{l}</button>
+    <Modal onClose={onClose} className="max-h-[92vh] overflow-y-auto">
+      {done && matches?.length ? <MatchResult matches={matches} onClose={onClose}/> : done ? <div className="text-center py-[50px]"><div className="text-6xl mb-4">🎉</div><div className="font-black text-2xl text-slate-900">Đăng tin thành công!</div></div> : <>
+        <div className="font-black text-xl text-slate-900 mb-5">📝 Đăng tin đồ vật</div>
+        <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mb-5">
+          {[["found","🟢 Tôi nhặt được"],["lost","🔵 Tôi bị mất"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setPtype(v)} className={`flex-1 py-2.5 rounded-lg border-none font-bold text-[13px] cursor-pointer transition ${ptype===v?(v==="found"?"bg-ok-500 text-white":"bg-brand-600 text-white"):"bg-transparent text-slate-500 hover:bg-slate-200"}`}>{l}</button>
           ))}
         </div>
-        <div style={{ background:`linear-gradient(135deg,${C.violet}18,${C.violetDark}08)`, border:`1.5px solid ${C.violet}28`, borderRadius:14, padding:"14px 16px", marginBottom:18, display:"flex", alignItems:"center", gap:12 }}>
-          <span style={{ fontSize:26 }}>🤖</span>
-          <div style={{ flex:1 }}><div style={{ fontWeight:700, fontSize:14 }}>Tự động điền bằng AI</div><div style={{ fontSize:12, color:C.text3, marginTop:2 }}>Chụp ảnh giấy tờ → AI đọc & điền form</div></div>
-          <button onClick={()=>setShowScan(true)} style={{ background:`linear-gradient(135deg,${C.violet},${C.violetDark})`, border:"none", borderRadius:10, padding:"9px 14px", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer", whiteSpace:"nowrap" }}>Quét ✨</button>
+        <div className="bg-ai-50 border border-ai-200 rounded-2xl px-4 py-3.5 mb-4.5 mb-5 flex items-center gap-3">
+          <span className="text-[26px]">🤖</span>
+          <div className="flex-1"><div className="font-bold text-sm text-slate-900">Tự động điền bằng AI</div><div className="text-xs text-slate-500 mt-0.5">Chụp ảnh giấy tờ → AI đọc & điền form</div></div>
+          <button onClick={()=>setShowScan(true)} className="bg-ai-600 hover:bg-ai-700 border-none rounded-lg px-3.5 py-2 text-white font-bold text-xs cursor-pointer whitespace-nowrap transition">Quét ✨</button>
         </div>
-        {docPrev && <div style={{ marginBottom:16, borderRadius:10, overflow:"hidden", border:`1.5px solid ${C.violet}35`, position:"relative" }}>
-          <img src={docPrev} alt="" style={{ width:"100%", maxHeight:90, objectFit:"cover", objectPosition:"top" }}/>
-          <div style={{ position:"absolute", top:8, right:8, background:`${C.violet}E0`, borderRadius:8, padding:"3px 10px", fontSize:11, fontWeight:700, color:"#fff" }}>✅ Đã quét AI</div>
-          <button onClick={()=>setShowScan(true)} style={{ position:"absolute", top:8, left:8, background:"rgba(0,0,0,0.6)", border:"none", borderRadius:8, padding:"3px 10px", fontSize:11, color:"#ccc", cursor:"pointer" }}>🔄 Quét lại</button>
+        {docPrev && <div className="mb-4 rounded-lg overflow-hidden border border-ai-300 relative">
+          <img src={docPrev} alt="" className="w-full max-h-[90px] object-cover object-top"/>
+          <div className="absolute top-2 right-2 bg-ai-600/90 rounded-lg px-2.5 py-0.5 text-[11px] font-bold text-white">✅ Đã quét AI</div>
+          <button onClick={()=>setShowScan(true)} className="absolute top-2 left-2 bg-black/60 border-none rounded-lg px-2.5 py-0.5 text-[11px] text-slate-200 cursor-pointer">🔄 Quét lại</button>
         </div>}
         <Field label="Tên / Mô tả đồ vật" value={form.title} onChange={set("title")} placeholder="VD: CCCD mang tên Nguyễn Văn A" required/>
         <Select label="Loại đồ vật" value={form.category} onChange={set("category")} options={ITEM_CAT}/>
-        {isDoc && <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 16px", marginBottom:14 }}>
+        {isDoc && <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 mb-3.5">
           <SectionTitle icon="📋" text="Thông tin trên giấy tờ"/>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
+          <div className="grid grid-cols-2 gap-x-3">
             <Field label="Họ và tên" value={form.hoTen} onChange={set("hoTen")} placeholder="Nguyễn Văn A"/>
             <Field label="Số giấy tờ" value={form.soGiayTo} onChange={set("soGiayTo")} placeholder="079201012345"/>
             <Field label="Ngày sinh" value={form.ngaySinh} onChange={set("ngaySinh")} placeholder="01/01/1990"/>
@@ -663,8 +662,8 @@ function PostItemModal({ onClose, onAdd }) {
         {ptype==="lost" && <Field label="Tiền thưởng (nếu có)" value={form.reward} onChange={set("reward")} placeholder="VD: 200.000đ"/>}
         <Field label="Ghi chú thêm" value={form.note} onChange={set("note")} placeholder="Đặc điểm nhận dạng thêm…" multiline/>
         <CaptchaBox elRef={captchaEl}/>
-        {err && <div style={{ background:"rgba(255,79,123,0.12)", border:`1px solid ${C.rose}`, borderRadius:10, padding:"9px 12px", fontSize:13, color:C.rose, marginBottom:12 }}>{err}</div>}
-        <button onClick={submit} disabled={busy||!captchaToken} style={{ ...S.btn(`linear-gradient(135deg,${ptype==="found"?C.teal:C.accent},${ptype==="found"?C.tealDark:C.accentDark})`), opacity:(busy||!captchaToken)?0.6:1 }}>{busy ? "Đang đăng…" : "Đăng tin ngay →"}</button>
+        {err && <div className="bg-warn-50 border border-warn-300 rounded-lg px-3 py-2.5 text-[13px] text-warn-700 mb-3">{err}</div>}
+        <button onClick={submit} disabled={busy||!captchaToken} className={btnCls(ptype==="found"?"found":"brand")}>{busy ? "Đang đăng…" : "Đăng tin ngay →"}</button>
       </>}
     </Modal>
     {showScan && <DocScanModal onClose={()=>setShowScan(false)} onFill={onFill}/>}
@@ -678,20 +677,19 @@ function PostMissingModal({ onClose, onAdd }) {
   const [form, setForm] = useState(emptyMissing);
   const [done, setDone] = useState(false);
   const [imgPrev, setImgPrev] = useState(null);
-  const [faceState, setFaceState] = useState("idle");   // idle | loading | ok | none | error
+  const [faceState, setFaceState] = useState("idle");
   const [face, setFace] = useState(null);
   const [faceNote, setFaceNote] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMsg, setAiMsg] = useState("");
   const [consent, setConsent] = useState(false);
-  const [publicPhoto, setPublicPhoto] = useState(null); // null = theo mặc định của loại tin
+  const [publicPhoto, setPublicPhoto] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [matches, setMatches] = useState(null);
   const token = useRef(0);
   const { elRef: captchaEl, token: captchaToken, reset: resetCaptcha } = useTurnstile();
   const set = k => v => setForm(f=>({...f,[k]:v}));
-  // Mặc định: gia đình đang tìm người -> hiện ảnh công khai; người gặp người lạc -> KHÔNG hiện ảnh công khai
   const showPhoto = publicPhoto ?? (ptype === "missing");
 
   const { pick, inputEl } = useImagePicker(async src => {
@@ -759,39 +757,41 @@ function PostMissingModal({ onClose, onAdd }) {
     } catch (e) { setErr(e.message || "Có lỗi xảy ra, vui lòng thử lại."); }
     setBusy(false);
   };
-  const tone = ptype==="missing" ? C.rose : C.teal;
-  const chk = { display:"flex", gap:10, alignItems:"flex-start", fontSize:12, color:C.text2, lineHeight:1.6, cursor:"pointer", marginBottom:8 };
+  const toneCls = ptype==="missing" ? "warn" : "found";
+  const toneDash = ptype==="missing" ? "border-warn-500" : "border-ok-500";
+  const toneBg = ptype==="missing" ? "bg-warn-50/60" : "bg-ok-50/60";
+  const chkCls = "flex gap-2.5 items-start text-xs text-slate-600 leading-relaxed cursor-pointer mb-2";
   return (
-    <Modal onClose={onClose} style={{ maxHeight:"92vh", overflowY:"auto" }}>
+    <Modal onClose={onClose} className="max-h-[92vh] overflow-y-auto">
       {inputEl}
-      {done && matches?.length ? <PersonMatchResult matches={matches} onClose={onClose}/> : done ? <div style={{ textAlign:"center", padding:"50px 0" }}><div style={{ fontSize:60, marginBottom:16 }}>🙏</div><div style={{ fontWeight:900, fontSize:22, marginBottom:8 }}>Tin đã được đăng!</div><div style={{ fontSize:13, color:C.text3 }}>Chưa thấy tin nào khớp lúc này. Khi có người đăng tin về đúng người này, họ sẽ thấy số liên hệ của bạn.</div></div> : <>
-        <div style={{ fontWeight:900, fontSize:20, marginBottom:20 }}>👤 Đăng tin tìm người thân</div>
-        <div style={{ display:"flex", gap:4, background:C.bg, borderRadius:12, padding:4, marginBottom:20 }}>
-          {[["missing","🔴 Tôi đang tìm"],["found_person","🟢 Tôi gặp người lạc"]].map(([v,l])=>(
-            <button key={v} onClick={()=>setPtype(v)} style={{ flex:1, padding:"10px 8px", borderRadius:9, border:"none", background:ptype===v?(v==="missing"?C.rose:C.teal):"transparent", color:ptype===v?"#fff":C.text3, fontWeight:700, fontSize:13, cursor:"pointer" }}>{l}</button>
+      {done && matches?.length ? <PersonMatchResult matches={matches} onClose={onClose}/> : done ? <div className="text-center py-[50px]"><div className="text-6xl mb-4">🙏</div><div className="font-black text-2xl text-slate-900 mb-2">Tin đã được đăng!</div><div className="text-[13px] text-slate-400">Chưa thấy tin nào khớp lúc này. Khi có người đăng tin về đúng người này, họ sẽ thấy số liên hệ của bạn.</div></div> : <>
+        <div className="font-black text-xl text-slate-900 mb-5">👤 Đăng tin tìm người thân</div>
+        <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mb-5">
+          {[["missing","🟠 Tôi đang tìm"],["found_person","🟢 Tôi gặp người lạc"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setPtype(v)} className={`flex-1 py-2.5 px-2 rounded-lg border-none font-bold text-[13px] cursor-pointer transition ${ptype===v?(v==="missing"?"bg-warn-600 text-white":"bg-ok-500 text-white"):"bg-transparent text-slate-500 hover:bg-slate-200"}`}>{l}</button>
           ))}
         </div>
-        <div style={{ marginBottom:14 }}>
-          <label style={{ display:"block", fontSize:11, color:C.text3, marginBottom:8, fontWeight:700, textTransform:"uppercase", letterSpacing:0.8 }}>
-            Ảnh khuôn mặt {ptype==="missing" ? "người cần tìm" : "người bạn gặp"} <span style={{ color:C.violet, fontWeight:400, textTransform:"none" }}>· giúp hệ thống nhận ra dù đổi quần áo</span>
+        <div className="mb-3.5">
+          <label className="block text-[11px] text-slate-500 mb-2 font-bold uppercase tracking-wide">
+            Ảnh khuôn mặt {ptype==="missing" ? "người cần tìm" : "người bạn gặp"} <span className="text-ai-600 font-normal normal-case">· giúp hệ thống nhận ra dù đổi quần áo</span>
           </label>
-          <div onClick={pick} style={{ border:`2px dashed ${imgPrev?tone:C.border2}`, borderRadius:12, padding:imgPrev?"8px":"22px", textAlign:"center", cursor:"pointer", background:imgPrev?`${tone}04`:C.bg, minHeight:100, display:"flex", alignItems:"center", justifyContent:"center" }}>
-            {imgPrev ? <div style={{ position:"relative", width:"100%" }}><img src={imgPrev} alt="" style={{ maxHeight:160, maxWidth:"100%", borderRadius:8, objectFit:"contain" }}/>{faceState==="loading" && <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.55)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, color:"#fff" }}>⏳ Đang phân tích khuôn mặt…</div>}</div>
-            : <div><div style={{ fontSize:34, marginBottom:8 }}>🖼️</div><div style={{ fontWeight:700, fontSize:14 }}>Tải ảnh rõ mặt</div><div style={{ fontSize:12, color:C.text3, marginTop:4 }}>Ảnh chụp thẳng, đủ sáng cho kết quả tốt nhất</div></div>}
+          <div onClick={pick} className={`border-2 border-dashed rounded-xl text-center cursor-pointer min-h-[100px] flex items-center justify-center ${imgPrev ? `p-2 ${toneDash} ${toneBg}` : "p-5 border-slate-300 bg-slate-50 hover:bg-slate-100"}`}>
+            {imgPrev ? <div className="relative w-full"><img src={imgPrev} alt="" className="max-h-40 max-w-full rounded-lg object-contain mx-auto"/>{faceState==="loading" && <div className="absolute inset-0 bg-black/55 rounded-lg flex items-center justify-center text-sm text-white">⏳ Đang phân tích khuôn mặt…</div>}</div>
+            : <div><div className="text-[34px] mb-2">🖼️</div><div className="font-bold text-sm text-slate-700">Tải ảnh rõ mặt</div><div className="text-xs text-slate-400 mt-1">Ảnh chụp thẳng, đủ sáng cho kết quả tốt nhất</div></div>}
           </div>
-          {imgPrev && <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap" }}>
-            <button onClick={pick} style={{ background:"transparent", border:`1px solid ${C.border2}`, borderRadius:8, padding:"5px 12px", color:C.text3, fontSize:12, cursor:"pointer" }}>🔄 Đổi ảnh</button>
-            <button onClick={removePhoto} style={{ background:"transparent", border:`1px solid ${C.border2}`, borderRadius:8, padding:"5px 12px", color:C.text3, fontSize:12, cursor:"pointer" }}>✖ Bỏ ảnh</button>
-            <button onClick={describeWithAI} disabled={aiBusy} style={{ background:`${C.violet}22`, border:`1px solid ${C.violet}55`, borderRadius:8, padding:"5px 12px", color:"#C9C3FF", fontSize:12, cursor:"pointer", opacity:aiBusy?0.6:1 }}>{aiBusy ? "🤖 AI đang mô tả…" : "🤖 Nhờ AI mô tả giúp"}</button>
+          {imgPrev && <div className="flex gap-2 mt-2 flex-wrap">
+            <button onClick={pick} className="bg-transparent border border-slate-300 rounded-lg px-3 py-1.5 text-slate-500 text-xs cursor-pointer">🔄 Đổi ảnh</button>
+            <button onClick={removePhoto} className="bg-transparent border border-slate-300 rounded-lg px-3 py-1.5 text-slate-500 text-xs cursor-pointer">✖ Bỏ ảnh</button>
+            <button onClick={describeWithAI} disabled={aiBusy} className="bg-ai-50 border border-ai-200 rounded-lg px-3 py-1.5 text-ai-700 text-xs cursor-pointer disabled:opacity-60">{aiBusy ? "🤖 AI đang mô tả…" : "🤖 Nhờ AI mô tả giúp"}</button>
           </div>}
-          {aiMsg && <div style={{ fontSize:12, color:C.text2, marginTop:6 }}>{aiMsg}</div>}
-          {imgPrev && <div style={{ fontSize:11, color:C.text3, marginTop:4 }}>Nút “Nhờ AI mô tả” sẽ gửi một bản ảnh nhỏ tới dịch vụ AI (Claude) để mô tả ngoại hình. Nhận diện khuôn mặt thì chạy ngay trên máy bạn.</div>}
-          {faceState==="ok" && <div style={{ fontSize:12, color:C.accent, marginTop:8 }}>✅ Đã nhận diện khuôn mặt — hệ thống sẽ dò các tin khớp {ptype==="missing" ? "trong danh sách người đã được gặp" : "trong danh sách người đang được tìm"}. {faceNote && <span style={{ color:C.gold }}>{faceNote}</span>}</div>}
-          {faceState==="none" && <div style={{ fontSize:12, color:C.gold, marginTop:8 }}>⚠️ Không thấy khuôn mặt rõ trong ảnh. Vẫn đăng được nhưng hệ thống chỉ dò theo họ tên. Hãy thử ảnh chụp rõ mặt hơn.</div>}
-          {faceState==="error" && <div style={{ fontSize:12, color:C.gold, marginTop:8 }}>⚠️ Trình duyệt này không chạy được nhận diện khuôn mặt. Bạn vẫn đăng được tin (dò theo họ tên).</div>}
+          {aiMsg && <div className="text-xs text-slate-600 mt-1.5">{aiMsg}</div>}
+          {imgPrev && <div className="text-[11px] text-slate-400 mt-1">Nút "Nhờ AI mô tả" sẽ gửi một bản ảnh nhỏ tới dịch vụ AI (Claude) để mô tả ngoại hình. Nhận diện khuôn mặt thì chạy ngay trên máy bạn.</div>}
+          {faceState==="ok" && <div className="text-xs text-ok-600 mt-2">✅ Đã nhận diện khuôn mặt — hệ thống sẽ dò các tin khớp {ptype==="missing" ? "trong danh sách người đã được gặp" : "trong danh sách người đang được tìm"}. {faceNote && <span className="text-gold-600">{faceNote}</span>}</div>}
+          {faceState==="none" && <div className="text-xs text-gold-600 mt-2">⚠️ Không thấy khuôn mặt rõ trong ảnh. Vẫn đăng được nhưng hệ thống chỉ dò theo họ tên. Hãy thử ảnh chụp rõ mặt hơn.</div>}
+          {faceState==="error" && <div className="text-xs text-gold-600 mt-2">⚠️ Trình duyệt này không chạy được nhận diện khuôn mặt. Bạn vẫn đăng được tin (dò theo họ tên).</div>}
         </div>
         <Field label="Họ và tên" value={form.hoTen} onChange={set("hoTen")} placeholder={ptype==="missing"?"Nguyễn Thị Lan":"Không rõ tên"} required/>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
+        <div className="grid grid-cols-2 gap-x-3">
           <Field label="Tuổi / Năm sinh" value={form.tuoi} onChange={set("tuoi")} placeholder="72 tuổi / 1952"/>
           <Select label="Giới tính" value={form.gioiTinh} onChange={set("gioiTinh")} options={["Nam","Nữ","Không rõ"]}/>
         </div>
@@ -805,19 +805,19 @@ function PostMissingModal({ onClose, onAdd }) {
         </>}
         <Field label="Số điện thoại liên hệ" value={form.contact} onChange={set("contact")} placeholder="0901 234 567" type="tel" required/>
         {ptype==="missing" && <Field label="Tiền thưởng (nếu có)" value={form.reward} onChange={set("reward")} placeholder="VD: 2.000.000đ"/>}
-        {imgPrev && <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:14 }}>
-          <label style={chk}>
-            <input type="checkbox" checked={showPhoto} onChange={e=>setPublicPhoto(e.target.checked)} style={{ marginTop:3 }}/>
+        {imgPrev && <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 mb-3.5">
+          <label className={chkCls}>
+            <input type="checkbox" checked={showPhoto} onChange={e=>setPublicPhoto(e.target.checked)} className="mt-0.5"/>
             <span><strong>Hiển thị ảnh công khai trên trang</strong>{ptype==="found_person" ? " — mặc định TẮT để bảo vệ người bạn gặp; hệ thống vẫn so khuôn mặt và báo cho gia đình đang tìm." : " — giúp nhiều người nhận ra hơn."}</span>
           </label>
-          <label style={{ ...chk, marginBottom:0 }}>
-            <input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)} style={{ marginTop:3 }}/>
+          <label className={`${chkCls} mb-0`}>
+            <input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)} className="mt-0.5"/>
             <span>Tôi đăng ảnh này với mục đích giúp {ptype==="missing" ? "tìm người thân" : "người lạc đoàn tụ với gia đình"}, và đồng ý để hệ thống lưu <strong>dãy số đặc trưng khuôn mặt</strong> (không phải ảnh) để đối chiếu. Tôi sẽ nhờ quản trị viên đóng tin khi đã tìm thấy.</span>
           </label>
         </div>}
         <CaptchaBox elRef={captchaEl}/>
-        {err && <div style={{ background:"rgba(255,79,123,0.12)", border:`1px solid ${C.rose}`, borderRadius:10, padding:"9px 12px", fontSize:13, color:C.rose, marginBottom:12 }}>{err}</div>}
-        <button onClick={submit} disabled={busy||!captchaToken} style={{ ...S.btn(`linear-gradient(135deg,${tone},${ptype==="missing"?C.roseDark:C.tealDark})`), opacity:(busy||!captchaToken)?0.6:1 }}>{busy ? "Đang đăng…" : "🙏 Đăng tin ngay"}</button>
+        {err && <div className="bg-warn-50 border border-warn-300 rounded-lg px-3 py-2.5 text-[13px] text-warn-700 mb-3">{err}</div>}
+        <button onClick={submit} disabled={busy||!captchaToken} className={btnCls(toneCls)}>{busy ? "Đang đăng…" : "🙏 Đăng tin ngay"}</button>
       </>}
     </Modal>
   );
@@ -825,74 +825,65 @@ function PostMissingModal({ onClose, onAdd }) {
 
 // ─── Item Detail Modal ────────────────────────────────────────────────────────
 function ItemDetail({ item, onClose }) {
-  const color = item.type==="lost" ? C.accent : C.teal;
+  const tone = item.type==="lost" ? TONE.lost : TONE.found;
   const sensitive = isSensitive(item);
   return (
     <Modal onClose={onClose}>
-      <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:18 }}>
-        <div style={{ width:60, height:60, borderRadius:16, background:`${color}18`, border:`1.5px solid ${color}30`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:30, flexShrink:0 }}>{item.img}</div>
+      <div className="flex items-center gap-3.5 mb-4.5 mb-5">
+        <div className={`w-15 h-15 w-[60px] h-[60px] rounded-2xl ${tone.soft} border ${tone.chipBorder} flex items-center justify-center text-[30px] shrink-0`}>{item.img}</div>
         <div>
-          <Chip text={item.type==="lost"?"🔴 Đang tìm":"🟢 Đã nhặt được"} color={color}/>
-          <h2 style={{ fontWeight:900, fontSize:18, margin:"8px 0 4px", lineHeight:1.3 }}>{sensitive ? privateTitle(item) : item.title}</h2>
-          <div style={{ fontSize:12, color:C.text3 }}>Đăng ngày {item.date}</div>
+          <Chip text={item.type==="lost"?"🟠 Đang tìm":"🟢 Đã nhặt được"} className={`${tone.chipBg} ${tone.chipText} ${tone.chipBorder}`}/>
+          <h2 className="font-black text-lg leading-tight my-2 text-slate-900">{sensitive ? privateTitle(item) : item.title}</h2>
+          <div className="text-xs text-slate-400">Đăng ngày {item.date}</div>
         </div>
       </div>
-      {sensitive && <div style={{ background:"rgba(241,196,15,0.08)", border:`1.5px solid #F1C40F40`, borderRadius:14, padding:"14px 16px", marginBottom:16 }}>
-        <div style={{ display:"flex", gap:10, alignItems:"flex-start", marginBottom:12 }}>
-          <span style={{ fontSize:22, flexShrink:0 }}>🔒</span>
+      {sensitive && <div className="bg-gold-50 border border-gold-400/40 rounded-2xl px-4 py-3.5 mb-4">
+        <div className="flex gap-2.5 items-start mb-3">
+          <span className="text-[22px] shrink-0">🔒</span>
           <div>
-            <div style={{ fontWeight:800, fontSize:14, marginBottom:4, color:"#F1C40F" }}>Thông tin đang được bảo mật</div>
-            <div style={{ fontSize:13, color:C.text3, lineHeight:1.6 }}>Số giấy tờ, ngày sinh và địa chỉ chi tiết chỉ hiển thị sau khi xác minh trùng khớp.</div>
+            <div className="font-extrabold text-sm mb-1 text-gold-600">Thông tin đang được bảo mật</div>
+            <div className="text-[13px] text-slate-500 leading-relaxed">Số giấy tờ, ngày sinh và địa chỉ chi tiết chỉ hiển thị sau khi xác minh trùng khớp.</div>
           </div>
         </div>
-        <div style={{ background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"10px 12px", marginBottom:12 }}>
-          <div style={{ fontSize:12, color:C.text2, fontWeight:700, marginBottom:8 }}>📋 Thông tin đã che:</div>
-          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-            {item.soGiayTo && <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
-              <span style={{ color:C.text3 }}>Số giấy tờ</span>
-              <span style={{ color:"#F1C40F", fontWeight:700, letterSpacing:2 }}>{maskID(item.soGiayTo)}</span>
-            </div>}
-            {item.ngaySinh && <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
-              <span style={{ color:C.text3 }}>Ngày sinh</span>
-              <span style={{ color:"#F1C40F", fontWeight:700 }}>{maskDate(item.ngaySinh)}</span>
-            </div>}
-            {item.diaChiThuongTru && <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
-              <span style={{ color:C.text3 }}>Địa chỉ</span>
-              <span style={{ color:"#F1C40F", fontWeight:700 }}>{maskAddress(item.diaChiThuongTru)}</span>
-            </div>}
+        <div className="bg-white/70 rounded-lg px-3 py-2.5 mb-3">
+          <div className="text-xs text-slate-600 font-bold mb-2">📋 Thông tin đã che:</div>
+          <div className="flex flex-col gap-1.5">
+            {item.soGiayTo && <div className="flex justify-between text-xs"><span className="text-slate-400">Số giấy tờ</span><span className="text-gold-600 font-bold tracking-widest">{maskID(item.soGiayTo)}</span></div>}
+            {item.ngaySinh && <div className="flex justify-between text-xs"><span className="text-slate-400">Ngày sinh</span><span className="text-gold-600 font-bold">{maskDate(item.ngaySinh)}</span></div>}
+            {item.diaChiThuongTru && <div className="flex justify-between text-xs"><span className="text-slate-400">Địa chỉ</span><span className="text-gold-600 font-bold">{maskAddress(item.diaChiThuongTru)}</span></div>}
           </div>
         </div>
-        <div style={{ fontSize:12, color:C.text3, lineHeight:1.7 }}>
-          💡 <strong style={{ color:C.text2 }}>Để xác minh:</strong> Gọi điện cho người đăng và cung cấp:<br/>
+        <div className="text-xs text-slate-500 leading-loose">
+          💡 <strong className="text-slate-700">Để xác minh:</strong> Gọi điện cho người đăng và cung cấp:<br/>
           1. Số 3 chữ số đầu của giấy tờ<br/>
           2. Tháng và năm sinh<br/>
           3. Tỉnh/thành phố trên giấy tờ
         </div>
       </div>}
-      <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:14 }}>
+      <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 mb-3.5">
         <SectionTitle icon="📍" text="Thông tin địa điểm"/>
         <InfoRow label="Loại đồ vật" value={item.category}/>
         <InfoRow label="Địa điểm" value={item.location}/>
         <InfoRow label="Ngày đăng" value={item.date}/>
       </div>
-      {item.note && !sensitive && <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:14 }}>
+      {item.note && !sensitive && <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 mb-3.5">
         <SectionTitle icon="📝" text="Ghi chú"/>
-        <p style={{ fontSize:14, color:C.text2, lineHeight:1.6, margin:0 }}>{item.note}</p>
+        <p className="text-sm text-slate-600 leading-relaxed m-0">{item.note}</p>
       </div>}
-      {(item.hoTen||item.soGiayTo) && <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:14 }}>
+      {(item.hoTen||item.soGiayTo) && <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 mb-3.5">
         <SectionTitle icon="📋" text="Thông tin trên giấy tờ"/>
         <InfoRow label="Họ và tên" value={sensitive ? "*** ***" : item.hoTen}/>
         <InfoRow label="Số giấy tờ" value={sensitive ? maskID(item.soGiayTo) : item.soGiayTo}/>
         <InfoRow label="Ngày sinh" value={sensitive ? maskDate(item.ngaySinh) : item.ngaySinh}/>
         {item.diaChiThuongTru && <InfoRow label="Địa chỉ" value={sensitive ? maskAddress(item.diaChiThuongTru) : item.diaChiThuongTru}/>}
       </div>}
-      {item.reward && <div style={{ background:`${C.gold}10`, border:`1px solid ${C.gold}25`, borderRadius:10, padding:"12px 16px", marginBottom:14, display:"flex", alignItems:"center", gap:8 }}>
-        <span style={{ fontSize:20 }}>🏆</span><span style={{ color:C.gold, fontWeight:700, fontSize:15 }}>Tiền thưởng: {item.reward}</span>
+      {item.reward && <div className="bg-gold-50 border border-gold-400/30 rounded-lg px-4 py-3 mb-3.5 flex items-center gap-2">
+        <span className="text-xl">🏆</span><span className="text-gold-600 font-bold text-[15px]">Tiền thưởng: {item.reward}</span>
       </div>}
-      <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:16 }}>
-        <div style={{ fontSize:12, color:C.text3, marginBottom:8 }}>{sensitive?"📞 Liên hệ để xác minh và nhận lại giấy tờ:":"📞 Liên hệ để trả / nhận đồ:"}</div>
-        <a href={`tel:${item.contact}`} style={{ display:"block", background:`linear-gradient(135deg,${color},${item.type==="found"?C.tealDark:C.accentDark})`, borderRadius:12, padding:"14px", color:"#fff", fontWeight:800, fontSize:17, textDecoration:"none", textAlign:"center" }}>{item.contact}</a>
-        {sensitive && <div style={{ textAlign:"center", fontSize:12, color:"#444", marginTop:8 }}>🔒 Thông tin giấy tờ chỉ xác nhận qua điện thoại</div>}
+      <div className="border-t border-slate-200 pt-4">
+        <div className="text-xs text-slate-400 mb-2">{sensitive?"📞 Liên hệ để xác minh và nhận lại giấy tờ:":"📞 Liên hệ để trả / nhận đồ:"}</div>
+        <a href={`tel:${item.contact}`} className={`block ${tone.solid} rounded-xl p-3.5 text-white font-extrabold text-[17px] no-underline text-center transition`}>{item.contact}</a>
+        {sensitive && <div className="text-center text-xs text-slate-400 mt-2">🔒 Thông tin giấy tờ chỉ xác nhận qua điện thoại</div>}
       </div>
     </Modal>
   );
@@ -901,40 +892,40 @@ function ItemDetail({ item, onClose }) {
 // ─── Missing Detail Modal ─────────────────────────────────────────────────────
 function MissingDetail({ person, onClose, onFaceSearch }) {
   const isFound = person.type==="found_person";
-  const uc = person.urgency==="high" ? C.rose : C.gold;
+  const uTone = person.urgency==="high" && !isFound ? TONE.urgent_high : isFound ? TONE.found_person : TONE.urgent_medium;
   return (
     <Modal onClose={onClose}>
-      <div style={{ display:"flex", gap:14, alignItems:"flex-start", marginBottom:18 }}>
-        <div style={{ width:64, height:64, borderRadius:16, background:`${uc}15`, border:`1.5px solid ${uc}30`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:34, flexShrink:0 }}>
-          {person.img ? <img src={person.img} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", borderRadius:14 }}/> : person.avatar}
+      <div className="flex gap-3.5 items-start mb-4.5 mb-5">
+        <div className={`w-16 h-16 rounded-2xl ${uTone.chipBg} border ${uTone.chipBorder} flex items-center justify-center text-[34px] shrink-0 overflow-hidden`}>
+          {person.img ? <img src={person.img} alt="" className="w-full h-full object-cover rounded-[14px]"/> : person.avatar}
         </div>
         <div>
-          {!isFound && person.urgency==="high" && <Chip text="🚨 Khẩn cấp" color={C.rose}/>}
-          {isFound && <Chip text="🟢 Đã gặp được" color={C.teal}/>}
-          {!isFound && person.urgency==="medium" && <Chip text="⚠️ Đang tìm" color={C.gold}/>}
-          <h2 style={{ fontWeight:900, fontSize:19, margin:"8px 0 4px" }}>{person.hoTen}</h2>
-          <div style={{ fontSize:13, color:C.text3 }}>{person.tuoi} · {person.gioiTinh}</div>
+          {!isFound && person.urgency==="high" && <Chip text="🚨 Khẩn cấp" className="bg-warn-50 text-warn-700 border-warn-200"/>}
+          {isFound && <Chip text="🟢 Đã gặp được" className="bg-ok-50 text-ok-700 border-ok-200"/>}
+          {!isFound && person.urgency==="medium" && <Chip text="⚠️ Đang tìm" className="bg-gold-50 text-gold-600 border-gold-400/40"/>}
+          <h2 className="font-black text-[19px] my-2 text-slate-900">{person.hoTen}</h2>
+          <div className="text-[13px] text-slate-400">{person.tuoi} · {person.gioiTinh}</div>
         </div>
       </div>
-      <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:14 }}>
+      <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 mb-3.5">
         <SectionTitle icon="🔍" text="Đặc điểm nhận dạng"/>
-        <p style={{ fontSize:14, color:C.text, lineHeight:1.7, margin:"0 0 10px" }}>{person.danhTich}</p>
+        <p className="text-sm text-slate-800 leading-relaxed m-0 mb-2.5">{person.danhTich}</p>
         {person.trangPhuc && <InfoRow label="👔 Trang phục" value={person.trangPhuc}/>}
       </div>
-      <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:14 }}>
+      <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 mb-3.5">
         <SectionTitle icon="📍" text="Thông tin sự cố"/>
         <InfoRow label="Lần cuối thấy" value={person.lanCuoiThay}/>
         <InfoRow label="Thời gian" value={person.thoiGian}/>
         <InfoRow label="Ngày đăng tin" value={person.date}/>
         {person.tieuChuan && <InfoRow label="Ghi chú" value={person.tieuChuan}/>}
       </div>
-      {person.reward && <div style={{ background:`${C.gold}10`, border:`1px solid ${C.gold}25`, borderRadius:10, padding:"12px 16px", marginBottom:14, display:"flex", alignItems:"center", gap:8 }}>
-        <span style={{ fontSize:20 }}>🏆</span><span style={{ color:C.gold, fontWeight:700, fontSize:15 }}>Tiền thưởng: {person.reward}</span>
+      {person.reward && <div className="bg-gold-50 border border-gold-400/30 rounded-lg px-4 py-3 mb-3.5 flex items-center gap-2">
+        <span className="text-xl">🏆</span><span className="text-gold-600 font-bold text-[15px]">Tiền thưởng: {person.reward}</span>
       </div>}
-      <button onClick={()=>{onClose();onFaceSearch();}} style={{ ...S.btn(`linear-gradient(135deg,${C.violet},${C.violetDark})`), marginBottom:10 }}>🔎 Tôi có ảnh — Đối chiếu ngay</button>
-      <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:14 }}>
-        <div style={{ fontSize:12, color:C.text3, marginBottom:8 }}>📞 Liên hệ ngay nếu có thông tin:</div>
-        <a href={`tel:${person.contact}`} style={{ display:"block", background:`linear-gradient(135deg,${uc},${person.urgency==="high"?C.roseDark:"#E6A817"})`, borderRadius:12, padding:"14px", color:"#fff", fontWeight:800, fontSize:17, textDecoration:"none", textAlign:"center" }}>{person.contact}</a>
+      <button onClick={()=>{onClose();onFaceSearch();}} className={btnCls("ai", "mb-2.5")}>🔎 Tôi có ảnh — Đối chiếu ngay</button>
+      <div className="border-t border-slate-200 pt-3.5">
+        <div className="text-xs text-slate-400 mb-2">📞 Liên hệ ngay nếu có thông tin:</div>
+        <a href={`tel:${person.contact}`} className={`block ${uTone.solid||"bg-warn-600 hover:bg-warn-700"} rounded-xl p-3.5 text-white font-extrabold text-[17px] no-underline text-center transition`}>{person.contact}</a>
       </div>
     </Modal>
   );
@@ -942,60 +933,56 @@ function MissingDetail({ person, onClose, onFaceSearch }) {
 
 // ─── Item Card ────────────────────────────────────────────────────────────────
 function ItemCard({ item, onClick }) {
-  const [hov, setHov] = useState(false);
-  const color = item.type==="lost" ? C.accent : C.teal;
+  const tone = item.type==="lost" ? TONE.lost : TONE.found;
   const sensitive = isSensitive(item);
   return (
-    <div onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{ background:C.bg2, border:`1.5px solid ${hov?color:C.border}`, borderRadius:16, padding:18, cursor:"pointer", transition:"all 0.18s", transform:hov?"translateY(-3px) scale(1.01)":"none", boxShadow:hov?`0 8px 24px ${color}18`:"none", position:"relative" }}>
-      <div style={{ position:"absolute", top:13, right:13 }}><Chip text={item.type==="lost"?"Đang tìm":"Đã nhặt"} color={color}/></div>
-      <div style={{ fontSize:32, marginBottom:12, width:52, height:52, background:`${color}12`, borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center" }}>{item.img}</div>
-      <div style={{ fontSize:10, color:C.text3, textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>{item.category}</div>
-      <div style={{ fontWeight:700, fontSize:14, marginBottom:6, lineHeight:1.4, paddingRight:70 }}>{sensitive ? privateTitle(item) : item.title}</div>
-      {item.hoTen && <div style={{ fontSize:11, color:C.violet, fontWeight:600, marginBottom:6 }}>
+    <div onClick={onClick}
+      className={`${cardCls} p-4.5 p-[18px] cursor-pointer transition-all duration-150 relative hover:-translate-y-1 hover:shadow-lg hover:${tone.ring}`}>
+      <div className="absolute top-3.5 right-3.5"><Chip text={item.type==="lost"?"Đang tìm":"Đã nhặt"} className={`${tone.chipBg} ${tone.chipText} ${tone.chipBorder}`}/></div>
+      <div className={`text-[32px] mb-3 w-13 h-13 w-[52px] h-[52px] ${tone.soft} rounded-xl flex items-center justify-center`}>{item.img}</div>
+      <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">{item.category}</div>
+      <div className="font-bold text-sm mb-1.5 leading-snug pr-[70px] text-slate-900">{sensitive ? privateTitle(item) : item.title}</div>
+      {item.hoTen && <div className="text-[11px] text-ai-600 font-semibold mb-1.5">
         👤 {sensitive ? "*** ***" : item.hoTen}
-        {item.soGiayTo && <span style={{ color:"#444" }}> · {sensitive ? maskID(item.soGiayTo) : item.soGiayTo}</span>}
+        {item.soGiayTo && <span className="text-slate-400"> · {sensitive ? maskID(item.soGiayTo) : item.soGiayTo}</span>}
       </div>}
-      {sensitive && item.type==="found" && <div style={{ fontSize:10, color:"#F1C40F", marginBottom:4, display:"flex", alignItems:"center", gap:4 }}>
-        🔒 <span>Thông tin được bảo mật — Liên hệ để xác minh</span>
-      </div>}
-      <div style={{ fontSize:11, color:"#444" }}>📍 {item.location}</div>
-      <div style={{ fontSize:11, color:"#333", marginTop:2 }}>📅 {item.date}</div>
-      {sensitive && <div style={{ marginTop:8, display:"flex", alignItems:"center", gap:5 }}><span style={{ fontSize:11 }}>🔒</span><span style={{ fontSize:11, color:"#555" }}>Bấm để liên hệ xác minh</span></div>}
-      {item.reward && <div style={{ marginTop:8, background:`${C.gold}12`, borderRadius:8, padding:"4px 10px", display:"inline-block" }}><span style={{ fontSize:12, color:C.gold, fontWeight:700 }}>🏆 {item.reward}</span></div>}
+      {sensitive && item.type==="found" && <div className="text-[10px] text-gold-600 mb-1 flex items-center gap-1">🔒 <span>Thông tin được bảo mật — Liên hệ để xác minh</span></div>}
+      <div className="text-[11px] text-slate-400">📍 {item.location}</div>
+      <div className="text-[11px] text-slate-400 mt-0.5">📅 {item.date}</div>
+      {sensitive && <div className="mt-2 flex items-center gap-1"><span className="text-[11px]">🔒</span><span className="text-[11px] text-slate-400">Bấm để liên hệ xác minh</span></div>}
+      {item.reward && <div className="mt-2 bg-gold-50 rounded-lg px-2.5 py-1 inline-block"><span className="text-xs text-gold-600 font-bold">🏆 {item.reward}</span></div>}
     </div>
   );
 }
 
 // ─── Missing Card ─────────────────────────────────────────────────────────────
 function MissingCard({ person, onClick }) {
-  const [hov, setHov] = useState(false);
   const isFound = person.type==="found_person";
-  const uc = person.urgency==="high"&&!isFound ? C.rose : (isFound ? C.teal : C.gold);
+  const uTone = person.urgency==="high" && !isFound ? TONE.urgent_high : isFound ? TONE.found_person : TONE.urgent_medium;
   return (
-    <div onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{ background:C.bg2, border:`1.5px solid ${hov?uc:C.border}`, borderRadius:16, padding:18, cursor:"pointer", transition:"all 0.18s", transform:hov?"translateY(-3px) scale(1.01)":"none", boxShadow:hov?`0 8px 24px ${uc}18`:"none", position:"relative" }}>
-      {person.urgency==="high"&&!isFound && <div style={{ position:"absolute", top:13, right:13 }}><Chip text="🚨 Khẩn" color={C.rose}/></div>}
-      {isFound && <div style={{ position:"absolute", top:13, right:13 }}><Chip text="🟢 Đã gặp" color={C.teal}/></div>}
-      {!isFound&&person.urgency==="medium" && <div style={{ position:"absolute", top:13, right:13 }}><Chip text="⚠️ Tìm kiếm" color={C.gold}/></div>}
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
-        <div style={{ width:50, height:50, borderRadius:12, background:`${uc}15`, border:`1.5px solid ${uc}25`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26, flexShrink:0, overflow:"hidden" }}>
-          {person.img ? <img src={person.img} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : person.avatar}
+    <div onClick={onClick}
+      className={`${cardCls} p-4.5 p-[18px] cursor-pointer transition-all duration-150 relative hover:-translate-y-1 hover:shadow-lg`}>
+      {person.urgency==="high" && !isFound && <div className="absolute top-3.5 right-3.5"><Chip text="🚨 Khẩn" className="bg-warn-50 text-warn-700 border-warn-200"/></div>}
+      {isFound && <div className="absolute top-3.5 right-3.5"><Chip text="🟢 Đã gặp" className="bg-ok-50 text-ok-700 border-ok-200"/></div>}
+      {!isFound && person.urgency==="medium" && <div className="absolute top-3.5 right-3.5"><Chip text="⚠️ Tìm kiếm" className="bg-gold-50 text-gold-600 border-gold-400/40"/></div>}
+      <div className="flex items-center gap-3 mb-2.5">
+        <div className={`w-[50px] h-[50px] rounded-xl ${uTone.chipBg} border ${uTone.chipBorder} flex items-center justify-center text-2xl shrink-0 overflow-hidden`}>
+          {person.img ? <img src={person.img} alt="" className="w-full h-full object-cover"/> : person.avatar}
         </div>
-        <div>
-          <div style={{ fontWeight:800, fontSize:14, lineHeight:1.3 }}>{person.hoTen}</div>
-          <div style={{ fontSize:12, color:C.text3 }}>{person.tuoi} · {person.gioiTinh}</div>
+        <div className="min-w-0 pr-16">
+          <div className="font-extrabold text-sm leading-tight text-slate-900 truncate">{person.hoTen}</div>
+          <div className="text-xs text-slate-400">{person.tuoi} · {person.gioiTinh}</div>
         </div>
       </div>
-      <div style={{ fontSize:12, color:C.text3, lineHeight:1.5, marginBottom:6 }}>{person.danhTich.slice(0,90)}{person.danhTich.length>90?"…":""}</div>
-      <div style={{ fontSize:11, color:"#444" }}>📍 {person.lanCuoiThay}</div>
-      <div style={{ fontSize:11, color:"#333", marginTop:2 }}>📅 {person.date}</div>
-      {person.reward && <div style={{ marginTop:8, background:`${C.gold}12`, borderRadius:8, padding:"4px 10px", display:"inline-block" }}><span style={{ fontSize:12, color:C.gold, fontWeight:700 }}>🏆 {person.reward}</span></div>}
+      <div className="text-xs text-slate-500 leading-relaxed mb-1.5">{person.danhTich.slice(0,90)}{person.danhTich.length>90?"…":""}</div>
+      <div className="text-[11px] text-slate-400">📍 {person.lanCuoiThay}</div>
+      <div className="text-[11px] text-slate-400 mt-0.5">📅 {person.date}</div>
+      {person.reward && <div className="mt-2 bg-gold-50 rounded-lg px-2.5 py-1 inline-block"><span className="text-xs text-gold-600 font-bold">🏆 {person.reward}</span></div>}
     </div>
   );
 }
 
-// ─── Login Modal ──────────────────────────────────────────────────────────────
+// ─── Login Modal (demo, chưa gắn với hệ thống xác thực thật) ─────────────────
 function LoginModal({ onClose, onLogin }) {
   const [step, setStep] = useState("phone");
   const [phone, setPhone] = useState("");
@@ -1023,39 +1010,39 @@ function LoginModal({ onClose, onLogin }) {
     }, 1000);
   };
   return (
-    <Modal onClose={onClose} style={{ maxWidth:400 }}>
-      {step==="done" ? <div style={{ textAlign:"center", padding:"40px 0" }}><div style={{ fontSize:56, marginBottom:14 }}>🎉</div><div style={{ fontWeight:900, fontSize:20 }}>Đăng nhập thành công!</div></div> : <>
-        <div style={{ textAlign:"center", marginBottom:24 }}>
-          <div style={{ width:56, height:56, borderRadius:16, background:`linear-gradient(135deg,${C.accent},${C.accentDark})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, margin:"0 auto 12px" }}>🔍</div>
-          <div style={{ fontWeight:900, fontSize:20 }}>Đăng nhập TìmĐồ<span style={{ color:C.accent }}>.vn</span></div>
-          <div style={{ fontSize:13, color:C.text3, marginTop:4 }}>{step==="phone"?"Nhập số điện thoại để nhận mã OTP":`Nhập mã OTP gửi đến ${phone}`}</div>
+    <Modal onClose={onClose} className="max-w-[400px]">
+      {step==="done" ? <div className="text-center py-10"><div className="text-[56px] mb-3.5">🎉</div><div className="font-black text-xl text-slate-900">Đăng nhập thành công!</div></div> : <>
+        <div className="text-center mb-6">
+          <div className="w-14 h-14 rounded-2xl bg-brand-600 flex items-center justify-center text-[28px] mx-auto mb-3">🔍</div>
+          <div className="font-black text-xl text-slate-900">Đăng nhập TìmĐồ<span className="text-brand-600">.vn</span></div>
+          <div className="text-[13px] text-slate-400 mt-1">{step==="phone"?"Nhập số điện thoại để nhận mã OTP":`Nhập mã OTP gửi đến ${phone}`}</div>
         </div>
         {step==="phone" && <>
-          <div style={{ marginBottom:14 }}>
-            <label style={{ display:"block", fontSize:11, color:C.text3, marginBottom:6, fontWeight:700, textTransform:"uppercase", letterSpacing:0.8 }}>Số điện thoại</label>
-            <div style={{ display:"flex", gap:8 }}>
-              <div style={{ background:C.bg3, border:`1.5px solid ${C.border2}`, borderRadius:10, padding:"11px 13px", fontSize:14, color:C.text3 }}>🇻🇳 +84</div>
-              <input value={phone} onChange={e=>setPhone(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendOtp()} placeholder="090 123 4567" style={{ ...S.input, flex:1 }} maxLength={12}/>
+          <div className="mb-3.5">
+            <label className="block text-[11px] text-slate-500 mb-1.5 font-bold uppercase tracking-wide">Số điện thoại</label>
+            <div className="flex gap-2">
+              <div className="bg-slate-100 border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-500">🇻🇳 +84</div>
+              <input value={phone} onChange={e=>setPhone(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendOtp()} placeholder="090 123 4567" className={`${inputCls} flex-1`} maxLength={12}/>
             </div>
           </div>
-          {err && <div style={{ color:"#FF7070", fontSize:13, marginBottom:10 }}>⚠️ {err}</div>}
-          <button onClick={sendOtp} disabled={loading} style={S.btn(loading?"#222":`linear-gradient(135deg,${C.accent},${C.accentDark})`, loading?"#555":"#fff")}>{loading?"Đang gửi OTP…":"Gửi mã OTP →"}</button>
-          <div style={{ textAlign:"center", marginTop:14, fontSize:12, color:C.text3 }}>Bằng cách đăng nhập, bạn đồng ý với <span style={{ color:C.accent, cursor:"pointer" }}>Điều khoản sử dụng</span></div>
+          {err && <div className="text-warn-600 text-[13px] mb-2.5">⚠️ {err}</div>}
+          <button onClick={sendOtp} disabled={loading} className={btnCls("brand")}>{loading?"Đang gửi OTP…":"Gửi mã OTP →"}</button>
+          <div className="text-center mt-3.5 text-xs text-slate-400">Bằng cách đăng nhập, bạn đồng ý với <span className="text-brand-600 cursor-pointer">Điều khoản sử dụng</span></div>
         </>}
         {step==="otp" && <>
-          <div style={{ display:"flex", gap:8, justifyContent:"center", marginBottom:20 }}>
+          <div className="flex gap-2 justify-center mb-5">
             {otp.map((v,i)=>(
               <input key={i} ref={refs[i]} value={v} onChange={e=>handleOtp(i,e.target.value)} onKeyDown={e=>e.key==="Backspace"&&!v&&i>0&&refs[i-1].current?.focus()} maxLength={1} inputMode="numeric"
-                style={{ width:46, height:54, textAlign:"center", fontSize:22, fontWeight:800, background:C.bg3, border:`2px solid ${v?C.accent:C.border2}`, borderRadius:12, color:C.text, outline:"none" }}/>
+                className={`w-[46px] h-[54px] text-center text-2xl font-extrabold bg-slate-50 border-2 rounded-xl text-slate-900 outline-none ${v?"border-brand-500":"border-slate-300"}`}/>
             ))}
           </div>
-          {err && <div style={{ color:"#FF7070", fontSize:13, marginBottom:10, textAlign:"center" }}>⚠️ {err}</div>}
-          <button onClick={verify} disabled={loading} style={S.btn(loading?"#222":`linear-gradient(135deg,${C.accent},${C.accentDark})`, loading?"#555":"#fff")}>{loading?"Đang xác minh…":"Xác nhận"}</button>
-          <div style={{ display:"flex", justifyContent:"space-between", marginTop:14 }}>
-            <button onClick={()=>{setStep("phone");setOtp(["","","","","",""]);setErr("");}} style={{ background:"transparent", border:"none", color:C.text3, fontSize:13, cursor:"pointer" }}>← Đổi số</button>
-            <button onClick={sendOtp} style={{ background:"transparent", border:"none", color:C.accent, fontSize:13, cursor:"pointer", fontWeight:600 }}>Gửi lại OTP</button>
+          {err && <div className="text-warn-600 text-[13px] mb-2.5 text-center">⚠️ {err}</div>}
+          <button onClick={verify} disabled={loading} className={btnCls("brand")}>{loading?"Đang xác minh…":"Xác nhận"}</button>
+          <div className="flex justify-between mt-3.5">
+            <button onClick={()=>{setStep("phone");setOtp(["","","","","",""]);setErr("");}} className="bg-transparent border-none text-slate-400 text-[13px] cursor-pointer">← Đổi số</button>
+            <button onClick={sendOtp} className="bg-transparent border-none text-brand-600 text-[13px] cursor-pointer font-semibold">Gửi lại OTP</button>
           </div>
-          <div style={{ textAlign:"center", marginTop:10, fontSize:11, color:"#444", background:C.bg, borderRadius:8, padding:"6px 10px" }}>💡 Demo: mã <strong style={{ color:C.gold }}>123456</strong></div>
+          <div className="text-center mt-2.5 text-[11px] text-slate-400 bg-slate-50 rounded-lg px-2.5 py-1.5">💡 Demo: mã <strong className="text-gold-600">123456</strong></div>
         </>}
       </>}
     </Modal>
@@ -1079,57 +1066,58 @@ function NotifPanel({ onClose, user }) {
   const [subDone, setSubDone] = useState(false);
   const unread = notifs.filter(n=>!n.read).length;
   const shown = tab==="unread" ? notifs.filter(n=>!n.read) : notifs;
-  const tc = t => t==="match"?C.teal:t==="urgent"?C.rose:C.violet;
+  const tc = t => t==="match"?"text-ok-600":t==="urgent"?"text-warn-600":"text-ai-600";
+  const tbg = t => t==="match"?"bg-ok-50":t==="urgent"?"bg-warn-50":"bg-ai-50";
   return (
-    <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:500, background:"rgba(0,0,0,0.5)" }}>
-      <div onClick={e=>e.stopPropagation()} style={{ position:"absolute", top:70, right:16, width:380, maxHeight:"80vh", background:C.bg1, border:`1.5px solid ${C.border}`, borderRadius:20, display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 20px 60px rgba(0,0,0,0.6)" }}>
-        <div style={{ padding:"16px 18px 0", borderBottom:`1px solid ${C.border}` }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-            <div style={{ fontWeight:800, fontSize:16 }}>🔔 Thông báo {unread>0&&<span style={{ background:C.rose, color:"#fff", fontSize:11, fontWeight:700, padding:"2px 7px", borderRadius:20, marginLeft:6 }}>{unread}</span>}</div>
-            <div style={{ display:"flex", gap:8 }}>
-              {unread>0 && <button onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} style={{ background:"transparent", border:"none", color:C.accent, fontSize:12, cursor:"pointer", fontWeight:600 }}>Đọc tất cả</button>}
-              <button onClick={onClose} style={{ background:"#222", border:"none", borderRadius:6, width:26, height:26, color:"#888", cursor:"pointer", fontSize:16 }}>×</button>
+    <div onClick={onClose} className="fixed inset-0 z-[500] bg-slate-900/40">
+      <div onClick={e=>e.stopPropagation()} className="absolute top-[70px] right-4 w-[380px] max-w-[92vw] max-h-[80vh] bg-white border border-slate-200 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+        <div className="px-4.5 px-[18px] pt-4 border-b border-slate-200">
+          <div className="flex items-center justify-between mb-3">
+            <div className="font-extrabold text-base text-slate-900">🔔 Thông báo {unread>0&&<span className="bg-warn-600 text-white text-[11px] font-bold px-1.5 py-0.5 rounded-full ml-1.5">{unread}</span>}</div>
+            <div className="flex gap-2">
+              {unread>0 && <button onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} className="bg-transparent border-none text-brand-600 text-xs cursor-pointer font-semibold">Đọc tất cả</button>}
+              <button onClick={onClose} className="bg-slate-100 border-none rounded-md w-6.5 h-6.5 w-[26px] h-[26px] text-slate-500 cursor-pointer text-base">×</button>
             </div>
           </div>
-          <div style={{ display:"flex", gap:4 }}>
+          <div className="flex gap-1">
             {[["all","Tất cả"],["unread","Chưa đọc"]].map(([v,l])=>(
-              <button key={v} onClick={()=>setTab(v)} style={{ padding:"6px 14px", borderRadius:"8px 8px 0 0", border:"none", background:tab===v?C.bg2:"transparent", color:tab===v?"#fff":C.text3, fontWeight:600, fontSize:12, cursor:"pointer" }}>{l}{v==="unread"&&unread>0?` (${unread})`:""}</button>
+              <button key={v} onClick={()=>setTab(v)} className={`px-3.5 py-1.5 rounded-t-lg border-none font-semibold text-xs cursor-pointer ${tab===v?"bg-slate-100 text-slate-900":"bg-transparent text-slate-400"}`}>{l}{v==="unread"&&unread>0?` (${unread})`:""}</button>
             ))}
           </div>
         </div>
-        <div style={{ overflowY:"auto", flex:1 }}>
-          {shown.length===0 ? <div style={{ textAlign:"center", padding:"40px 0", color:C.text3 }}><div style={{ fontSize:36, marginBottom:8 }}>🔕</div><div>Không có thông báo mới</div></div>
+        <div className="overflow-y-auto flex-1">
+          {shown.length===0 ? <div className="text-center py-10 text-slate-400"><div className="text-4xl mb-2">🔕</div><div>Không có thông báo mới</div></div>
           : shown.map(n=>(
-            <div key={n.id} onClick={()=>setNotifs(p=>p.map(x=>x.id===n.id?{...x,read:true}:x))} style={{ padding:"14px 18px", borderBottom:`1px solid ${C.border}`, background:n.read?"transparent":`${tc(n.type)}08`, cursor:"pointer" }}>
-              <div style={{ display:"flex", gap:10 }}>
-                <div style={{ width:38, height:38, borderRadius:10, background:`${tc(n.type)}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>{n.icon}</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:n.read?600:800, fontSize:13, lineHeight:1.4, color:n.read?C.text2:C.text }}>{n.title}</div>
-                  <div style={{ fontSize:12, color:C.text3, lineHeight:1.5, marginTop:3 }}>{n.body}</div>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
-                    <span style={{ fontSize:11, color:"#444" }}>{n.time}</span>
-                    {n.action && <span style={{ fontSize:11, color:tc(n.type), fontWeight:700, cursor:"pointer" }}>{n.action} →</span>}
+            <div key={n.id} onClick={()=>setNotifs(p=>p.map(x=>x.id===n.id?{...x,read:true}:x))} className={`px-4.5 px-[18px] py-3.5 border-b border-slate-100 cursor-pointer ${n.read?"":tbg(n.type)}`}>
+              <div className="flex gap-2.5">
+                <div className={`w-[38px] h-[38px] rounded-lg ${tbg(n.type)} flex items-center justify-center text-lg shrink-0`}>{n.icon}</div>
+                <div className="flex-1">
+                  <div className={`text-[13px] leading-snug ${n.read?"font-semibold text-slate-600":"font-extrabold text-slate-900"}`}>{n.title}</div>
+                  <div className="text-xs text-slate-400 leading-relaxed mt-0.5">{n.body}</div>
+                  <div className="flex justify-between mt-1.5">
+                    <span className="text-[11px] text-slate-400">{n.time}</span>
+                    {n.action && <span className={`text-[11px] font-bold cursor-pointer ${tc(n.type)}`}>{n.action} →</span>}
                   </div>
                 </div>
               </div>
             </div>
           ))}
         </div>
-        <div style={{ borderTop:`1px solid ${C.border}`, padding:"12px 18px" }}>
-          {!showSub ? <button onClick={()=>setShowSub(true)} style={{ ...S.btn(`linear-gradient(135deg,${C.violet},${C.violetDark})`), padding:"10px", fontSize:13 }}>📲 Đăng ký nhận thông báo SMS / Zalo</button>
-          : subDone ? <div style={{ textAlign:"center", padding:"10px 0", color:C.teal, fontWeight:700 }}>✅ Đăng ký thành công!</div>
+        <div className="border-t border-slate-200 px-4.5 px-[18px] py-3">
+          {!showSub ? <button onClick={()=>setShowSub(true)} className={btnCls("ai", "py-2.5 text-[13px]")}>📲 Đăng ký nhận thông báo SMS / Zalo</button>
+          : subDone ? <div className="text-center py-2.5 text-ok-600 font-bold">✅ Đăng ký thành công!</div>
           : <div>
-              <div style={{ fontWeight:700, fontSize:13, marginBottom:10 }}>📲 Cài đặt thông báo</div>
-              <div style={{ display:"flex", gap:6, marginBottom:8 }}>
+              <div className="font-bold text-[13px] mb-2.5 text-slate-900">📲 Cài đặt thông báo</div>
+              <div className="flex gap-1.5 mb-2">
                 {[["sms","📱 SMS"],["zalo","💬 Zalo"]].map(([v,l])=>(
-                  <button key={v} onClick={()=>setSubCh(v)} style={{ flex:1, padding:"8px", borderRadius:8, border:`1.5px solid ${subCh===v?C.violet:C.border2}`, background:subCh===v?`${C.violet}18`:"transparent", color:subCh===v?C.violet:C.text3, fontWeight:600, fontSize:13, cursor:"pointer" }}>{l}</button>
+                  <button key={v} onClick={()=>setSubCh(v)} className={`flex-1 py-2 rounded-lg border font-semibold text-[13px] cursor-pointer ${subCh===v?"border-ai-500 bg-ai-50 text-ai-700":"border-slate-300 bg-transparent text-slate-500"}`}>{l}</button>
                 ))}
               </div>
-              <input value={subPhone} onChange={e=>setSubPhone(e.target.value)} placeholder="090 123 4567" style={{ ...S.input, fontSize:13, marginBottom:8 }}/>
-              <input value={subKw} onChange={e=>setSubKw(e.target.value)} placeholder="Từ khóa: ví, CCCD, Quận 1…" style={{ ...S.input, fontSize:13, marginBottom:10 }}/>
-              <div style={{ display:"flex", gap:8 }}>
-                <button onClick={()=>setShowSub(false)} style={{ ...S.btn("#222","#aaa"), flex:1, padding:"9px", fontSize:13 }}>Huỷ</button>
-                <button onClick={()=>setSubDone(true)} style={{ ...S.btn(`linear-gradient(135deg,${C.violet},${C.violetDark})`), flex:2, padding:"9px", fontSize:13 }}>Đăng ký</button>
+              <input value={subPhone} onChange={e=>setSubPhone(e.target.value)} placeholder="090 123 4567" className={`${inputCls} text-[13px] mb-2`}/>
+              <input value={subKw} onChange={e=>setSubKw(e.target.value)} placeholder="Từ khóa: ví, CCCD, Quận 1…" className={`${inputCls} text-[13px] mb-2.5`}/>
+              <div className="flex gap-2">
+                <button onClick={()=>setShowSub(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 rounded-xl py-2.5 text-[13px] text-slate-600 border-none cursor-pointer font-bold">Huỷ</button>
+                <button onClick={()=>setSubDone(true)} className="flex-[2] bg-ai-600 hover:bg-ai-700 rounded-xl py-2.5 text-[13px] text-white border-none cursor-pointer font-bold">Đăng ký</button>
               </div>
             </div>}
         </div>
@@ -1147,7 +1135,7 @@ const MAP_PINS = [
   { id:101,lat:10.7731,lng:106.6980, title:"Bà Nguyễn Thị Lan (72t)", location:"Chợ Bến Thành",       type:"missing", cat:"person" },
   { id:102,lat:10.7710,lng:106.6920, title:"Em Phạm Quốc Bảo (8t)",   location:"Công viên 23/9",       type:"missing", cat:"person" },
 ];
-const PIN_COLOR = { lost:"#FF6B35", found:"#2EC4B6", missing:"#FF4F7B" };
+const PIN_COLOR = { lost:"#2563EB", found:"#10B981", missing:"#EA580C" };
 function MapModal({ onClose }) {
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(null);
@@ -1157,22 +1145,22 @@ function MapModal({ onClose }) {
   const toX = lng => ((lng-102)/(110-102))*100;
   const toY = lat => ((23.5-lat)/(23.5-8.5))*100;
   return (
-    <Modal onClose={onClose} style={{ maxWidth:680, padding:0, overflow:"hidden" }}>
-      <div style={{ padding:"18px 22px 14px", borderBottom:`1px solid ${C.border}` }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-          <div style={{ fontWeight:800, fontSize:18 }}>🗺️ Bản đồ tin đăng</div>
-          <button onClick={onClose} style={{ background:"#222", border:"none", borderRadius:8, width:30, height:30, color:"#888", cursor:"pointer", fontSize:18 }}>×</button>
+    <Modal onClose={onClose} className="max-w-[680px] p-0 overflow-hidden">
+      <div className="px-5.5 px-[22px] pt-4.5 pt-[18px] pb-3.5 border-b border-slate-200">
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-extrabold text-lg text-slate-900">🗺️ Bản đồ tin đăng</div>
+          <button onClick={onClose} className="bg-slate-100 border-none rounded-lg w-[30px] h-[30px] text-slate-500 cursor-pointer text-lg">×</button>
         </div>
-        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+        <div className="flex gap-1.5 flex-wrap">
           {[["all","🗺️ Tất cả"],["items","🪪 Đồ vật"],["missing","👤 Người thân"]].map(([v,l])=>(
-            <button key={v} onClick={()=>{setFilter(v);setSelected(null);}} style={{ padding:"6px 14px", borderRadius:8, border:`1.5px solid ${filter===v?C.accent:C.border}`, background:filter===v?`${C.accent}12`:"transparent", color:filter===v?C.accent:C.text3, fontWeight:600, fontSize:12, cursor:"pointer" }}>{l}</button>
+            <button key={v} onClick={()=>{setFilter(v);setSelected(null);}} className={`px-3.5 py-1.5 rounded-lg border font-semibold text-xs cursor-pointer ${filter===v?"border-brand-500 bg-brand-50 text-brand-700":"border-slate-300 bg-transparent text-slate-500"}`}>{l}</button>
           ))}
-          <button onClick={()=>setPick(!pick)} style={{ marginLeft:"auto", padding:"6px 14px", borderRadius:8, border:`1.5px solid ${pick?C.violet:C.border}`, background:pick?`${C.violet}18`:"transparent", color:pick?C.violet:C.text3, fontWeight:600, fontSize:12, cursor:"pointer" }}>
+          <button onClick={()=>setPick(!pick)} className={`ml-auto px-3.5 py-1.5 rounded-lg border font-semibold text-xs cursor-pointer ${pick?"border-ai-500 bg-ai-50 text-ai-700":"border-slate-300 bg-transparent text-slate-500"}`}>
             {pick?"✅ Đang chọn":"📍 Chọn vị trí"}
           </button>
         </div>
       </div>
-      <div style={{ position:"relative", background:"#0D1117", cursor:pick?"crosshair":"default" }}
+      <div className="relative bg-slate-900" style={{ cursor:pick?"crosshair":"default" }}
         onClick={e=>{
           if (!pick) return;
           const rect = e.currentTarget.getBoundingClientRect();
@@ -1180,14 +1168,14 @@ function MapModal({ onClose }) {
           const lat = 23.5-((e.clientY-rect.top)/rect.height)*(23.5-8.5);
           setPicked({ lat:lat.toFixed(4), lng:lng.toFixed(4) });
         }}>
-        <svg viewBox="0 0 100 100" style={{ width:"100%", height:380, display:"block" }} preserveAspectRatio="none">
-          <rect width="100" height="100" fill="#0D1117"/>
-          <path d="M 52 5 L 58 8 L 64 12 L 68 18 L 70 25 L 66 32 L 72 38 L 74 44 L 70 50 L 65 55 L 68 62 L 66 70 L 60 78 L 54 85 L 50 90 L 46 85 L 44 78 L 46 70 L 42 62 L 40 55 L 38 48 L 42 42 L 38 36 L 36 30 L 40 22 L 44 15 L 48 8 Z" fill="#1a2332" stroke="#2A3F5F" strokeWidth="0.5"/>
+        <svg viewBox="0 0 100 100" className="w-full h-[380px] block" preserveAspectRatio="none">
+          <rect width="100" height="100" fill="#0F172A"/>
+          <path d="M 52 5 L 58 8 L 64 12 L 68 18 L 70 25 L 66 32 L 72 38 L 74 44 L 70 50 L 65 55 L 68 62 L 66 70 L 60 78 L 54 85 L 50 90 L 46 85 L 44 78 L 46 70 L 42 62 L 40 55 L 38 48 L 42 42 L 38 36 L 36 30 L 40 22 L 44 15 L 48 8 Z" fill="#1E293B" stroke="#334155" strokeWidth="0.5"/>
           {[{n:"Hà Nội",lat:21.03,lng:105.85},{n:"TP.HCM",lat:10.78,lng:106.70},{n:"Đà Nẵng",lat:16.05,lng:108.22}].map(c=>(
-            <text key={c.n} x={toX(c.lng)} y={toY(c.lat)+5} fontSize="2" fill="#3A4A6A" textAnchor="middle">{c.n}</text>
+            <text key={c.n} x={toX(c.lng)} y={toY(c.lat)+5} fontSize="2" fill="#64748B" textAnchor="middle">{c.n}</text>
           ))}
           {pins.map(p=>{
-            const x=toX(p.lng), y=toY(p.lat), color=PIN_COLOR[p.type]||C.accent, sel=selected?.id===p.id;
+            const x=toX(p.lng), y=toY(p.lat), color=PIN_COLOR[p.type]||"#2563EB", sel=selected?.id===p.id;
             return <g key={p.id} onClick={e=>{e.stopPropagation();setSelected(p);}} style={{ cursor:"pointer" }}>
               <circle cx={x} cy={y} r={sel?3.5:2.5} fill={color} opacity={0.9}/>
               <circle cx={x} cy={y} r={sel?5:4} fill={color} opacity={0.2}/>
@@ -1195,31 +1183,31 @@ function MapModal({ onClose }) {
             </g>;
           })}
           {picked && <>
-            <circle cx={toX(parseFloat(picked.lng))} cy={toY(parseFloat(picked.lat))} r="3" fill={C.violet} opacity={0.9}/>
-            <circle cx={toX(parseFloat(picked.lng))} cy={toY(parseFloat(picked.lat))} r="6" fill={C.violet} opacity={0.2}/>
+            <circle cx={toX(parseFloat(picked.lng))} cy={toY(parseFloat(picked.lat))} r="3" fill="#6366F1" opacity={0.9}/>
+            <circle cx={toX(parseFloat(picked.lng))} cy={toY(parseFloat(picked.lat))} r="6" fill="#6366F1" opacity={0.2}/>
           </>}
         </svg>
-        <div style={{ position:"absolute", top:12, left:12, background:"rgba(0,0,0,0.75)", borderRadius:10, padding:"8px 12px", display:"flex", flexDirection:"column", gap:5 }}>
-          {[["Đang tìm đồ",C.accent],["Đã nhặt được",C.teal],["Người mất tích",C.rose]].map(([l,c])=>(
-            <div key={l} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:"#ccc" }}>
-              <div style={{ width:10, height:10, borderRadius:"50%", background:c, flexShrink:0 }}/>{l}
+        <div className="absolute top-3 left-3 bg-black/70 rounded-lg px-3 py-2 flex flex-col gap-1.5">
+          {[["Đang tìm đồ","#2563EB"],["Đã nhặt được","#10B981"],["Người mất tích","#EA580C"]].map(([l,c])=>(
+            <div key={l} className="flex items-center gap-1.5 text-[11px] text-slate-200">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background:c }}/>{l}
             </div>
           ))}
         </div>
-        {pick && <div style={{ position:"absolute", bottom:0, left:0, right:0, background:`${C.violet}E0`, padding:"10px", textAlign:"center", fontSize:13, color:"#fff", fontWeight:600 }}>📍 Bấm vào bản đồ để chọn vị trí</div>}
+        {pick && <div className="absolute bottom-0 left-0 right-0 bg-ai-600/90 py-2.5 text-center text-[13px] text-white font-semibold">📍 Bấm vào bản đồ để chọn vị trí</div>}
       </div>
-      {selected && <div style={{ padding:"14px 22px", borderTop:`1px solid ${C.border}`, display:"flex", alignItems:"center", gap:12 }}>
-        <div style={{ width:40, height:40, borderRadius:10, background:`${PIN_COLOR[selected.type]}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>{selected.cat==="person"?"👤":"📦"}</div>
-        <div style={{ flex:1 }}><div style={{ fontWeight:700, fontSize:14 }}>{selected.title}</div><div style={{ fontSize:12, color:C.text3 }}>📍 {selected.location}</div></div>
+      {selected && <div className="px-5.5 px-[22px] py-3.5 border-t border-slate-200 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl" style={{ background:`${PIN_COLOR[selected.type]}1A` }}>{selected.cat==="person"?"👤":"📦"}</div>
+        <div className="flex-1"><div className="font-bold text-sm text-slate-900">{selected.title}</div><div className="text-xs text-slate-400">📍 {selected.location}</div></div>
       </div>}
-      {picked && pick && <div style={{ padding:"12px 22px", borderTop:`1px solid ${C.border}`, background:`${C.violet}08`, display:"flex", alignItems:"center", gap:10 }}>
-        <span style={{ fontSize:20 }}>📍</span>
-        <div style={{ flex:1 }}><div style={{ fontSize:13, fontWeight:700 }}>Vị trí đã chọn</div><div style={{ fontSize:12, color:C.text3 }}>Lat: {picked.lat} · Lng: {picked.lng}</div></div>
-        <button onClick={()=>{setPick(false);setPicked(null);}} style={{ ...S.btn(`linear-gradient(135deg,${C.violet},${C.violetDark})`), width:"auto", padding:"8px 14px", fontSize:12 }}>Dùng vị trí này ✓</button>
+      {picked && pick && <div className="px-5.5 px-[22px] py-3 border-t border-slate-200 bg-ai-50 flex items-center gap-2.5">
+        <span className="text-xl">📍</span>
+        <div className="flex-1"><div className="text-[13px] font-bold text-slate-900">Vị trí đã chọn</div><div className="text-xs text-slate-400">Lat: {picked.lat} · Lng: {picked.lng}</div></div>
+        <button onClick={()=>{setPick(false);setPicked(null);}} className="bg-ai-600 hover:bg-ai-700 rounded-lg px-3.5 py-2 text-xs text-white border-none cursor-pointer font-bold">Dùng vị trí này ✓</button>
       </div>}
-      <div style={{ padding:"10px 22px", borderTop:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", fontSize:12, color:C.text3 }}>
-        <span>Hiển thị <strong style={{ color:"#ccc" }}>{pins.length}</strong> vị trí</span>
-        <span>{["🔴","🟢","🔵"].map((i,k)=>`${i} ${[pins.filter(p=>p.type==="lost").length,pins.filter(p=>p.type==="found").length,pins.filter(p=>p.type==="missing").length][k]}`).join("  ")}</span>
+      <div className="px-5.5 px-[22px] py-2.5 border-t border-slate-200 flex justify-between text-xs text-slate-400">
+        <span>Hiển thị <strong className="text-slate-700">{pins.length}</strong> vị trí</span>
+        <span>{["🔵","🟢","🟠"].map((i,k)=>`${i} ${[pins.filter(p=>p.type==="lost").length,pins.filter(p=>p.type==="found").length,pins.filter(p=>p.type==="missing").length][k]}`).join("  ")}</span>
       </div>
     </Modal>
   );
@@ -1228,11 +1216,17 @@ function MapModal({ onClose }) {
 // ─── Trang quản trị (mở bằng timdovn.vn/#admin) ───────────────────────────────
 const digitsOnly = v => String(v||"").replace(/\D/g,"");
 const dupKey = i => `${i.type}|${String(i.so_giay_to||"").replace(/\W/g,"").toUpperCase() || String(i.title||"").trim().toLowerCase()}|${digitsOnly(i.contact)}`;
-const btnSm = (color) => ({ background:"transparent", border:`1.5px solid ${color}`, borderRadius:8, padding:"6px 12px", color, fontWeight:700, fontSize:12, cursor:"pointer" });
-const badge = (color) => ({ display:"inline-block", fontSize:11, fontWeight:800, color, border:`1px solid ${color}`, borderRadius:6, padding:"1px 7px", marginRight:6 });
+const adminBtnCls = (tone) => {
+  const map = { brand:"border-brand-600 text-brand-600 hover:bg-brand-50", warn:"border-warn-600 text-warn-600 hover:bg-warn-50", ok:"border-ok-600 text-ok-600 hover:bg-ok-50", ghost:"border-slate-300 text-slate-500 hover:bg-slate-100" };
+  return `bg-white border rounded-lg px-3 py-1.5 font-bold text-xs cursor-pointer transition ${map[tone]||map.ghost}`;
+};
+const adminBadgeCls = (tone) => {
+  const map = { brand:"text-brand-700 border-brand-300", warn:"text-warn-700 border-warn-300", ok:"text-ok-700 border-ok-300", gold:"text-gold-600 border-gold-400", slate:"text-slate-500 border-slate-300" };
+  return `inline-block text-[11px] font-extrabold border rounded-md px-1.5 py-0.5 mr-1.5 mb-1 ${map[tone]||map.slate}`;
+};
 
 function AdminPanel({ onExit }) {
-  const [session, setSession] = useState(undefined);   // undefined = đang kiểm tra đăng nhập
+  const [session, setSession] = useState(undefined);
   const [isAdmin, setIsAdmin] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -1311,87 +1305,87 @@ function AdminPanel({ onExit }) {
   const shownItems = items.filter(hit);
   const shownPersons = persons.filter(hit);
 
-  const wrap = { minHeight:"100vh", background:C.bg, color:C.text, fontFamily:"'Segoe UI',system-ui,sans-serif", padding:"20px 16px" };
-  const inner = { maxWidth:900, margin:"0 auto" };
-  const card = { background:C.bg2, border:`1.5px solid ${C.border}`, borderRadius:14, padding:"14px 16px", marginBottom:10 };
+  const wrap = "min-h-screen bg-slate-50 text-slate-900 px-4 py-5";
+  const inner = "max-w-[900px] mx-auto";
+  const card = "bg-white border border-slate-200 rounded-2xl px-4 py-3.5 mb-2.5";
 
-  if (session === undefined) return <div style={wrap}><div style={inner}>Đang kiểm tra đăng nhập…</div></div>;
+  if (session === undefined) return <div className={wrap}><div className={inner}>Đang kiểm tra đăng nhập…</div></div>;
 
   if (!session) return (
-    <div style={wrap}><div style={{ ...inner, maxWidth:400 }}>
-      <div style={{ ...S.box, marginTop:40 }}>
-        <div style={{ fontWeight:900, fontSize:20, marginBottom:4 }}>🛡️ Quản trị TìmĐồ.vn</div>
-        <div style={{ fontSize:13, color:C.text3, marginBottom:18 }}>Chỉ dành cho quản trị viên.</div>
+    <div className={wrap}><div className={`${inner} max-w-[400px]`}>
+      <div className={`${cardCls} shadow-sm p-7 mt-10`}>
+        <div className="font-black text-xl text-slate-900 mb-1">🛡️ Quản trị TìmĐồ.vn</div>
+        <div className="text-[13px] text-slate-400 mb-4.5 mb-5">Chỉ dành cho quản trị viên.</div>
         <form onSubmit={login}>
           <Field label="Email" value={email} onChange={setEmail} type="email" placeholder="email@quantri.com" required/>
           <Field label="Mật khẩu" value={password} onChange={setPassword} type="password" required/>
-          {loginErr && <div style={{ color:C.rose, fontSize:13, marginBottom:12 }}>{loginErr}</div>}
-          <button type="submit" disabled={busy} style={{ ...S.btn(`linear-gradient(135deg,${C.accent},${C.accentDark})`), opacity:busy?0.6:1 }}>{busy ? "Đang đăng nhập…" : "Đăng nhập"}</button>
+          {loginErr && <div className="text-warn-600 text-[13px] mb-3">{loginErr}</div>}
+          <button type="submit" disabled={busy} className={btnCls("brand")}>{busy ? "Đang đăng nhập…" : "Đăng nhập"}</button>
         </form>
-        <button onClick={onExit} style={{ ...btnSm(C.text3), marginTop:14 }}>← Về trang chủ</button>
+        <button onClick={onExit} className={`${adminBtnCls("ghost")} mt-3.5`}>← Về trang chủ</button>
       </div>
     </div></div>
   );
 
-  if (isAdmin === null) return <div style={wrap}><div style={inner}>Đang kiểm tra quyền…</div></div>;
+  if (isAdmin === null) return <div className={wrap}><div className={inner}>Đang kiểm tra quyền…</div></div>;
 
   if (!isAdmin) return (
-    <div style={wrap}><div style={{ ...inner, maxWidth:460 }}>
-      <div style={{ ...S.box, marginTop:40 }}>
-        <div style={{ fontWeight:900, fontSize:18, marginBottom:8 }}>Tài khoản chưa có quyền admin</div>
-        <div style={{ fontSize:13, color:C.text3, marginBottom:16 }}>{session.user?.email} chưa nằm trong danh sách quản trị viên.</div>
-        <button onClick={() => supabase.auth.signOut()} style={S.btn(C.bg3, C.text2)}>Đăng xuất</button>
+    <div className={wrap}><div className={`${inner} max-w-[460px]`}>
+      <div className={`${cardCls} shadow-sm p-7 mt-10`}>
+        <div className="font-black text-lg text-slate-900 mb-2">Tài khoản chưa có quyền admin</div>
+        <div className="text-[13px] text-slate-400 mb-4">{session.user?.email} chưa nằm trong danh sách quản trị viên.</div>
+        <button onClick={() => supabase.auth.signOut()} className={btnCls("ghost")}>Đăng xuất</button>
       </div>
     </div></div>
   );
 
   return (
-    <div style={wrap}><div style={inner}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10, marginBottom:16 }}>
+    <div className={wrap}><div className={inner}>
+      <div className="flex justify-between items-center flex-wrap gap-2.5 mb-4">
         <div>
-          <div style={{ fontWeight:900, fontSize:20 }}>🛡️ Quản trị TìmĐồ.vn</div>
-          <div style={{ fontSize:12, color:C.text3 }}>{session.user?.email}</div>
+          <div className="font-black text-xl text-slate-900">🛡️ Quản trị TìmĐồ.vn</div>
+          <div className="text-xs text-slate-400">{session.user?.email}</div>
         </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <button onClick={loadAll} style={btnSm(C.teal)}>↻ Tải lại</button>
-          <button onClick={onExit} style={btnSm(C.text2)}>Trang chủ</button>
-          <button onClick={() => supabase.auth.signOut()} style={btnSm(C.rose)}>Đăng xuất</button>
+        <div className="flex gap-2">
+          <button onClick={loadAll} className={adminBtnCls("ok")}>↻ Tải lại</button>
+          <button onClick={onExit} className={adminBtnCls("ghost")}>Trang chủ</button>
+          <button onClick={() => supabase.auth.signOut()} className={adminBtnCls("warn")}>Đăng xuất</button>
         </div>
       </div>
 
-      <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+      <div className="flex gap-2 mb-3">
         {[["items", `Đồ vật (${items.length})`], ["missing", `Người mất tích (${persons.length})`]].map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)} style={{ ...btnSm(tab === k ? C.accent : C.text3), background: tab === k ? "rgba(39,174,96,0.15)" : "transparent" }}>{l}</button>
+          <button key={k} onClick={() => setTab(k)} className={`${adminBtnCls(tab===k?"brand":"ghost")} ${tab===k?"bg-brand-50":""}`}>{l}</button>
         ))}
       </div>
-      <input value={q} onChange={e => setQ(e.target.value)} placeholder="Tìm theo tên, số giấy tờ, SĐT, địa điểm, nội dung…" style={{ ...S.input, marginBottom:12 }}/>
-      {msg && <div style={{ ...card, borderColor:C.gold, color:C.gold, fontSize:13 }}>{msg}</div>}
+      <input value={q} onChange={e => setQ(e.target.value)} placeholder="Tìm theo tên, số giấy tờ, SĐT, địa điểm, nội dung…" className={`${inputCls} mb-3`}/>
+      {msg && <div className={`${card} border-gold-400 text-gold-600 text-[13px]`}>{msg}</div>}
 
       {tab === "items" && <>
-        <div style={{ fontSize:12, color:C.text3, marginBottom:8 }}>Hiển thị {Math.min(shownItems.length, 200)}/{shownItems.length} tin. ⚠ = nghi trùng lặp hoặc spam. Xóa là vĩnh viễn.</div>
+        <div className="text-xs text-slate-400 mb-2">Hiển thị {Math.min(shownItems.length, 200)}/{shownItems.length} tin. ⚠ = nghi trùng lặp hoặc spam. Xóa là vĩnh viễn.</div>
         {shownItems.slice(0, 200).map(row => {
           const dup = dupCount[dupKey(row)] > 1;
           const spam = phoneCount[digitsOnly(row.contact)] >= 5;
           const label = `${row.category} — ${row.title || ""}`;
           return (
-            <div key={row.id} style={{ ...card, opacity: row.status === "resolved" ? 0.6 : 1 }}>
-              <div style={{ marginBottom:6 }}>
-                <span style={badge(row.type === "found" ? C.teal : C.rose)}>{row.type === "found" ? "ĐÃ NHẶT" : "ĐANG TÌM"}</span>
-                <span style={badge(C.text3)}>{row.category}</span>
-                {row.status === "resolved" && <span style={badge(C.accent)}>ĐÃ TRẢ</span>}
-                {dup && <span style={badge(C.gold)}>⚠ Nghi trùng lặp</span>}
-                {spam && <span style={badge(C.gold)}>⚠ SĐT đăng {phoneCount[digitsOnly(row.contact)]} tin</span>}
+            <div key={row.id} className={card} style={{ opacity: row.status === "resolved" ? 0.6 : 1 }}>
+              <div className="mb-1.5">
+                <span className={adminBadgeCls(row.type === "found" ? "ok" : "brand")}>{row.type === "found" ? "ĐÃ NHẶT" : "ĐANG TÌM"}</span>
+                <span className={adminBadgeCls("slate")}>{row.category}</span>
+                {row.status === "resolved" && <span className={adminBadgeCls("ok")}>ĐÃ TRẢ</span>}
+                {dup && <span className={adminBadgeCls("gold")}>⚠ Nghi trùng lặp</span>}
+                {spam && <span className={adminBadgeCls("gold")}>⚠ SĐT đăng {phoneCount[digitsOnly(row.contact)]} tin</span>}
               </div>
-              <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>{row.title}</div>
-              <div style={{ fontSize:12, color:C.text2, lineHeight:1.7 }}>
+              <div className="font-bold text-sm mb-1 text-slate-900">{row.title}</div>
+              <div className="text-xs text-slate-600 leading-relaxed">
                 {row.ho_ten && <div>👤 {row.ho_ten}{row.so_giay_to ? ` · ${row.so_giay_to}` : ""}{row.ngay_sinh ? ` · ${row.ngay_sinh}` : ""}</div>}
                 <div>📍 {row.location} · 📞 {row.contact} · 📅 {row.date} {row.reward ? `· 🏆 ${row.reward}` : ""}</div>
                 {row.note && <div>📝 {row.note}</div>}
-                <div style={{ color:C.text3 }}>Đăng lúc {row.created_at ? new Date(row.created_at).toLocaleString("vi-VN") : "?"}</div>
+                <div className="text-slate-400">Đăng lúc {row.created_at ? new Date(row.created_at).toLocaleString("vi-VN") : "?"}</div>
               </div>
-              <div style={{ display:"flex", gap:8, marginTop:10 }}>
-                <button onClick={() => toggleResolved(row)} style={btnSm(C.accent)}>{row.status === "resolved" ? "↩ Mở lại" : "✅ Đã trả"}</button>
-                <button onClick={() => removeRow("items", row, label)} style={btnSm(C.rose)}>🗑 Xóa</button>
+              <div className="flex gap-2 mt-2.5">
+                <button onClick={() => toggleResolved(row)} className={adminBtnCls("ok")}>{row.status === "resolved" ? "↩ Mở lại" : "✅ Đã trả"}</button>
+                <button onClick={() => removeRow("items", row, label)} className={adminBtnCls("warn")}>🗑 Xóa</button>
               </div>
             </div>
           );
@@ -1399,32 +1393,32 @@ function AdminPanel({ onExit }) {
       </>}
 
       {tab === "missing" && <>
-        <div style={{ fontSize:12, color:C.text3, marginBottom:8 }}>Hiển thị {Math.min(shownPersons.length, 200)}/{shownPersons.length} tin. ⏳ = đăng quá 60 ngày, nên xem xét xóa (không tự động xóa). Xóa là vĩnh viễn.</div>
+        <div className="text-xs text-slate-400 mb-2">Hiển thị {Math.min(shownPersons.length, 200)}/{shownPersons.length} tin. ⏳ = đăng quá 60 ngày, nên xem xét xóa (không tự động xóa). Xóa là vĩnh viễn.</div>
         {shownPersons.slice(0, 200).map(row => {
           const oldPost = row.status !== "resolved" && row.created_at &&
             (Date.now() - new Date(row.created_at).getTime()) > 60 * 24 * 60 * 60 * 1000;
           return (
-          <div key={row.id} style={card}>
-            <div style={{ display:"flex", gap:12 }}>
-              {row.photo_path && <img src={photoUrl(row.photo_path)} alt="" style={{ width:64, height:64, borderRadius:10, objectFit:"cover", flexShrink:0 }}/>}
-              <div style={{ minWidth:0 }}>
-                <div style={{ marginBottom:6 }}>
-                  <span style={badge(row.type === "found_person" ? C.teal : C.rose)}>{row.type === "missing" ? "ĐANG TÌM NGƯỜI" : row.type === "found_person" ? "ĐÃ GẶP NGƯỜI LẠC" : String(row.type || "").toUpperCase()}</span>
-                  {row.urgency === "high" && row.type === "missing" && <span style={badge(C.gold)}>KHẨN</span>}
-                  {row.status === "resolved" && <span style={badge(C.accent)}>ĐÃ TÌM THẤY</span>}
-                  {oldPost && <span style={badge(C.gold)}>⏳ Quá 60 ngày — nên xem xét xóa</span>}
+          <div key={row.id} className={card}>
+            <div className="flex gap-3">
+              {row.photo_path && <img src={photoUrl(row.photo_path)} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0"/>}
+              <div className="min-w-0">
+                <div className="mb-1.5">
+                  <span className={adminBadgeCls(row.type === "found_person" ? "ok" : "warn")}>{row.type === "missing" ? "ĐANG TÌM NGƯỜI" : row.type === "found_person" ? "ĐÃ GẶP NGƯỜI LẠC" : String(row.type || "").toUpperCase()}</span>
+                  {row.urgency === "high" && row.type === "missing" && <span className={adminBadgeCls("gold")}>KHẨN</span>}
+                  {row.status === "resolved" && <span className={adminBadgeCls("ok")}>ĐÃ TÌM THẤY</span>}
+                  {oldPost && <span className={adminBadgeCls("gold")}>⏳ Quá 60 ngày — nên xem xét xóa</span>}
                 </div>
-                <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>{row.ho_ten} {row.tuoi ? `· ${row.tuoi}` : ""} {row.gioi_tinh ? `· ${row.gioi_tinh}` : ""}</div>
+                <div className="font-bold text-sm mb-1 text-slate-900">{row.ho_ten} {row.tuoi ? `· ${row.tuoi}` : ""} {row.gioi_tinh ? `· ${row.gioi_tinh}` : ""}</div>
               </div>
             </div>
-            <div style={{ fontSize:12, color:C.text2, lineHeight:1.7 }}>
+            <div className="text-xs text-slate-600 leading-relaxed">
               {row.danh_tich && <div>🔎 {row.danh_tich}</div>}
               {row.lan_cuoi_thay && <div>📍 {row.lan_cuoi_thay} {row.thoi_gian ? `· ${row.thoi_gian}` : ""}</div>}
               <div>📞 {row.contact} · 📅 {row.date}</div>
             </div>
-            <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
-              {row.status !== "resolved" && <button onClick={() => markPersonFound(row)} style={btnSm(C.accent)}>✅ Đã tìm thấy</button>}
-              <button onClick={() => removeRow("missing_persons", row, row.ho_ten || "")} style={btnSm(C.rose)}>🗑 Xóa</button>
+            <div className="flex gap-2 mt-2.5 flex-wrap">
+              {row.status !== "resolved" && <button onClick={() => markPersonFound(row)} className={adminBtnCls("ok")}>✅ Đã tìm thấy</button>}
+              <button onClick={() => removeRow("missing_persons", row, row.ho_ten || "")} className={adminBtnCls("warn")}>🗑 Xóa</button>
             </div>
           </div>
           );
@@ -1451,6 +1445,7 @@ export default function App() {
   const [showNotif, setShowNotif] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [navOpen, setNavOpen] = useState(false); // menu di động cho Navbar — chỉ UI, không ảnh hưởng dữ liệu
   const [adminMode, setAdminMode] = useState(() => typeof window !== "undefined" && window.location.hash === "#admin");
   useEffect(() => {
     const onHash = () => setAdminMode(window.location.hash === "#admin");
@@ -1488,7 +1483,6 @@ export default function App() {
   });
 
   const addItem = async (item, captchaToken) => {
-    // Lưu tin + dò tin trùng khớp: qua máy chủ Vercel (kiểm tra CAPTCHA trước, rồi mới gọi post_item trong Supabase)
     const r = await fetch("/api/post-item", { method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ p: {
         type:item.type, category:item.category, title:item.title,
@@ -1501,7 +1495,6 @@ export default function App() {
     return { ok:true, matches: j.data?.matches || [] };
   };
   const addMissing = async (m, captchaToken) => {
-    // Lưu tin + dò người khớp (khuôn mặt / họ tên): qua máy chủ Vercel (kiểm tra CAPTCHA trước, rồi mới gọi post_missing)
     const r = await fetch("/api/post-missing", { method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ p: {
         type:m.type, ho_ten:m.hoTen||"", tuoi:m.tuoi||"", gioi_tinh:m.gioiTinh||"", danh_tich:m.danhTich||"",
@@ -1511,7 +1504,7 @@ export default function App() {
     const j = await r.json().catch(()=>({}));
     if (!r.ok || j.error) { console.error("Lỗi lưu tin:", j.error); return { ok:false, error: dbMsg({ message:j.error }) || j.error || "Không lưu được tin, vui lòng thử lại sau." }; }
     const shown = { ...m, id: j.data?.id ?? m.id, img: photoUrl(m.photoPath) };
-    delete shown.face; delete shown.photoPath; delete shown.photoPublic;   // không giữ vector khuôn mặt trong bộ nhớ trang
+    delete shown.face; delete shown.photoPath; delete shown.photoPublic;
     setMissing(prev=>[shown, ...prev]);
     return { ok:true, matches: j.data?.matches || [] };
   };
@@ -1519,71 +1512,75 @@ export default function App() {
   if (adminMode) return <AdminPanel onExit={() => { window.location.hash = ""; }} />;
 
   return (
-    <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Segoe UI',system-ui,sans-serif", color:C.text }}>
-      <style>{`
-        @keyframes spin { to { transform:rotate(360deg); } }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
-        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
-        * { -webkit-tap-highlight-color:transparent; }
-        ::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-track{background:#0D1F12} ::-webkit-scrollbar-thumb{background:#1E4D2B;border-radius:3px}
-        input::placeholder { color: #9CA3AF !important; }
-        input { color: #FFFFFF; }
-      `}</style>
-
-      {/* HEADER */}
-      <header style={{ background:`${C.bg1}F8`, backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}`, padding:"0 22px", position:"sticky", top:0, zIndex:200 }}>
-        <div style={{ maxWidth:1040, margin:"0 auto", display:"flex", alignItems:"center", justifyContent:"space-between", height:62 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:38, height:38, borderRadius:11, background:`linear-gradient(135deg,${C.accent},${C.accentDark})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🔍</div>
+    <div className="min-h-screen bg-white text-slate-900">
+      {/* ─── NAVBAR (thông minh, responsive, menu di động) ─── */}
+      <header className="bg-white/95 backdrop-blur-sm border-b border-slate-200 px-4 sm:px-5.5 sm:px-[22px] sticky top-0 z-[200]">
+        <div className="max-w-[1140px] mx-auto flex items-center justify-between h-16">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9.5 h-9.5 w-[38px] h-[38px] rounded-xl bg-brand-600 flex items-center justify-center text-xl text-white shrink-0">🔍</div>
             <div>
-              <div style={{ fontWeight:900, fontSize:19, letterSpacing:-0.5, lineHeight:1 }}>TìmĐồ<span style={{ color:C.heroAccent }}>.vn</span></div>
-              <div style={{ fontSize:9, color:C.text3, letterSpacing:1.5, textTransform:"uppercase" }}>Đồ vật · Người thân · AI</div>
+              <div className="font-black text-lg sm:text-[19px] tracking-tight leading-none text-slate-900">TìmĐồ<span className="text-brand-600">.vn</span></div>
+              <div className="text-[9px] text-slate-400 tracking-widest uppercase hidden sm:block">Đồ vật · Người thân · AI</div>
             </div>
           </div>
-          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-            <button onClick={()=>setShowMap(true)} style={{ background:"#1A1A1A", border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 12px", color:C.text3, fontSize:16, cursor:"pointer" }}>🗺️</button>
-            <button onClick={()=>setShowNotif(v=>!v)} style={{ position:"relative", background:"#1A1A1A", border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 12px", color:C.text3, cursor:"pointer", fontSize:18 }}>🔔</button>
-            {mainTab==="missing" && <button onClick={()=>setFaceSearch(true)} style={{ background:`linear-gradient(135deg,${C.violet},${C.violetDark})`, border:"none", borderRadius:10, padding:"9px 14px", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}>🔎 Đối chiếu ảnh</button>}
-            <button onClick={()=>{ mainTab==="items"?setPostItem(true):setPostMissing(true); }} style={{ background:`linear-gradient(135deg,${mainTab==="missing"?C.rose:C.accent},${mainTab==="missing"?C.roseDark:C.accentDark})`, border:"none", borderRadius:10, padding:"9px 16px", color:"#fff", fontWeight:800, fontSize:14, cursor:"pointer" }}>+ Đăng tin</button>
+          {/* Desktop actions */}
+          <div className="hidden md:flex gap-2 items-center">
+            <button onClick={()=>setShowMap(true)} className="bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-slate-500 text-base cursor-pointer transition">🗺️</button>
+            <button onClick={()=>setShowNotif(v=>!v)} className="relative bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-slate-500 cursor-pointer text-lg transition">🔔</button>
+            {mainTab==="missing" && <button onClick={()=>setFaceSearch(true)} className="bg-warn-600 hover:bg-warn-700 border-none rounded-lg px-3.5 py-2.5 text-white font-bold text-[13px] cursor-pointer transition">🔎 Đối chiếu ảnh</button>}
+            <button onClick={()=>{ mainTab==="items"?setPostItem(true):setPostMissing(true); }} className={`border-none rounded-lg px-4 py-2.5 text-white font-extrabold text-sm cursor-pointer transition ${mainTab==="missing"?"bg-warn-600 hover:bg-warn-700":"bg-brand-600 hover:bg-brand-700"}`}>+ Đăng tin</button>
           </div>
+          {/* Mobile hamburger */}
+          <button onClick={()=>setNavOpen(v=>!v)} className="md:hidden bg-slate-50 border border-slate-200 rounded-lg w-10 h-10 flex items-center justify-center text-slate-600 text-xl" aria-label="Mở menu">
+            {navOpen ? "✕" : "☰"}
+          </button>
         </div>
+        {/* Mobile dropdown menu */}
+        {navOpen && (
+          <div className="md:hidden max-w-[1140px] mx-auto pb-3 flex flex-col gap-2">
+            <button onClick={()=>{setShowMap(true);setNavOpen(false);}} className="text-left bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5 text-sm text-slate-600 font-semibold">🗺️ Bản đồ tin đăng</button>
+            <button onClick={()=>{setShowNotif(true);setNavOpen(false);}} className="text-left bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5 text-sm text-slate-600 font-semibold">🔔 Thông báo</button>
+            {mainTab==="missing" && <button onClick={()=>{setFaceSearch(true);setNavOpen(false);}} className="text-left bg-warn-50 border border-warn-200 rounded-lg px-3.5 py-2.5 text-sm text-warn-700 font-semibold">🔎 Đối chiếu ảnh</button>}
+            <button onClick={()=>{ mainTab==="items"?setPostItem(true):setPostMissing(true); setNavOpen(false); }} className={`text-left border-none rounded-lg px-3.5 py-2.5 text-white font-extrabold text-sm ${mainTab==="missing"?"bg-warn-600":"bg-brand-600"}`}>+ Đăng tin</button>
+          </div>
+        )}
       </header>
 
       {/* MAIN TAB BAR */}
-      <div style={{ background:C.bg1, borderBottom:`1px solid ${C.border}` }}>
-        <div style={{ maxWidth:1040, margin:"0 auto", display:"flex" }}>
+      <div className="bg-slate-50 border-b border-slate-200">
+        <div className="max-w-[1140px] mx-auto flex overflow-x-auto">
           {[["items","🪪","Đồ vật thất lạc"],["missing","👤","Tìm người thân"]].map(([v,icon,l])=>(
-            <button key={v} onClick={()=>{setMainTab(v);setSearch("");}} style={{ padding:"14px 20px", border:"none", background:"transparent", color:mainTab===v?"#fff":C.text3, fontWeight:700, fontSize:14, cursor:"pointer", borderBottom:`2.5px solid ${mainTab===v?(v==="missing"?C.rose:C.accent):"transparent"}`, display:"flex", alignItems:"center", gap:6, position:"relative" }}>
+            <button key={v} onClick={()=>{setMainTab(v);setSearch("");}} className={`px-4 sm:px-5 py-3.5 border-0 border-b-[2.5px] bg-transparent font-bold text-sm cursor-pointer flex items-center gap-1.5 relative whitespace-nowrap transition ${mainTab===v?(v==="missing"?"text-warn-700 border-warn-600":"text-brand-700 border-brand-600"):"text-slate-400 border-transparent hover:text-slate-600"}`}>
               <span>{icon}</span><span>{l}</span>
-              {v==="missing"&&urgentCount>0 && <span style={{ background:C.rose, color:"#fff", fontSize:10, fontWeight:800, width:18, height:18, borderRadius:"50%", display:"inline-flex", alignItems:"center", justifyContent:"center", animation:"blink 1.5s ease infinite" }}>{urgentCount}</span>}
+              {v==="missing"&&urgentCount>0 && <span className="bg-warn-600 text-white text-[10px] font-extrabold w-[18px] h-[18px] rounded-full inline-flex items-center justify-center animate-blink">{urgentCount}</span>}
             </button>
           ))}
         </div>
       </div>
 
-      {/* HERO */}
-      <div style={{ background:`linear-gradient(180deg,#0D2B1A 0%,${C.bg} 100%)`, padding:"40px 22px 28px", textAlign:"center", borderBottom:`1px solid #1E4D2B` }}>
-        <div style={{ maxWidth:580, margin:"0 auto" }}>
+      {/* HERO / BANNER TÌM KIẾM ĐA NĂNG */}
+      <div className={`bg-gradient-to-b ${mainTab==="missing" ? "from-warn-700 to-warn-600" : "from-brand-700 to-brand-600"} px-4 sm:px-5.5 sm:px-[22px] pt-9 sm:pt-10 pb-7 text-center`}>
+        <div className="max-w-[600px] mx-auto">
           {mainTab==="missing" ? <>
-            <div style={{ fontSize:11, color:C.rose, fontWeight:700, letterSpacing:3, textTransform:"uppercase", marginBottom:10 }}>Kết nối · Chia sẻ · Tìm thấy</div>
-            <h1 style={{ fontSize:34, fontWeight:900, margin:"0 0 10px", lineHeight:1.1, letterSpacing:-1, color:C.heroTitle }}>Tìm người thân<br/><span style={{ color:C.rose }}>thất lạc</span></h1>
-            <p style={{ color:C.statText, fontSize:14, margin:"0 0 20px", lineHeight:1.65 }}>Đăng tin hoặc <strong style={{ color:C.heroAccent }}>tải ảnh để AI đối chiếu</strong> với hồ sơ người mất tích</p>
+            <div className="text-[11px] text-warn-100 font-bold tracking-[3px] uppercase mb-2.5">Kết nối · Chia sẻ · Tìm thấy</div>
+            <h1 className="text-[28px] sm:text-[34px] font-black m-0 mb-2.5 leading-[1.1] tracking-tight text-white">Tìm người thân<br/><span className="text-white/90">thất lạc</span></h1>
+            <p className="text-warn-50 text-sm m-0 mb-5 leading-relaxed">Đăng tin hoặc <strong className="text-white">tải ảnh để AI đối chiếu</strong> với hồ sơ người mất tích</p>
           </> : <>
-            <div style={{ fontSize:11, color:C.accent, fontWeight:700, letterSpacing:3, textTransform:"uppercase", marginBottom:10 }}>Nền tảng kết nối và hỗ trợ cộng đồng</div>
-            <h1 style={{ fontSize:34, fontWeight:900, margin:"0 0 10px", lineHeight:1.1, letterSpacing:-1, color:C.heroTitle }}>Mất đồ? Nhặt được?<br/><span style={{ color:C.heroAccent }}>Kết nối ngay!</span></h1>
-            <p style={{ color:C.statText, fontSize:14, margin:"0 0 20px", lineHeight:1.65 }}>Tải ảnh giấy tờ — <strong style={{ color:C.heroAccent }}>AI tự nhận diện & điền thông tin</strong></p>
+            <div className="text-[11px] text-brand-100 font-bold tracking-[3px] uppercase mb-2.5">Nền tảng kết nối và hỗ trợ cộng đồng</div>
+            <h1 className="text-[28px] sm:text-[34px] font-black m-0 mb-2.5 leading-[1.1] tracking-tight text-white">Mất đồ? Nhặt được?<br/><span className="text-white/90">Kết nối ngay!</span></h1>
+            <p className="text-brand-50 text-sm m-0 mb-5 leading-relaxed">Tải ảnh giấy tờ — <strong className="text-white">AI tự nhận diện & điền thông tin</strong></p>
           </>}
-          <div style={{ position:"relative", maxWidth:440, margin:"0 auto 20px" }}>
-            <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", fontSize:16, pointerEvents:"none" }}>🔍</span>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={mainTab==="missing"?"Tìm theo tên, đặc điểm, địa điểm…":"Tra cứu nhanh theo tên, số giấy tờ hoặc địa điểm, thông tin người thất lạc…"} style={{ ...S.input, padding:"13px 14px 13px 42px", borderRadius:14, fontSize:15, border:`1.5px solid ${C.border}`, color:"#FFFFFF", background:"rgba(255,255,255,0.1)", "::placeholder":{color:"#9CA3AF"} }}/>
-            {search && <button onClick={()=>setSearch("")} style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"transparent", border:"none", color:C.text3, cursor:"pointer", fontSize:18 }}>×</button>}
+          <div className="relative max-w-[440px] mx-auto mb-5">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-base pointer-events-none">🔍</span>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={mainTab==="missing"?"Tìm theo tên, đặc điểm, địa điểm…":"Tra cứu nhanh theo tên, số giấy tờ hoặc địa điểm…"} className="w-full box-border px-3.5 py-3 pl-11 rounded-2xl text-[15px] border-0 outline-none bg-white text-slate-900 placeholder:text-slate-400 shadow-lg"/>
+            {search && <button onClick={()=>setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-none text-slate-400 cursor-pointer text-lg">×</button>}
           </div>
-          <div style={{ display:"flex", justifyContent:"center", gap:24, flexWrap:"wrap", rowGap:8 }}>
+          <div className="flex justify-center gap-6 flex-wrap gap-y-2">
             {(mainTab==="missing"
-              ? [[C.rose,urgentCount,"Khẩn cấp"],[C.heroAccent,missing.filter(m=>m.type==="missing").length,"Đang tìm"],[C.teal,missing.filter(m=>m.type==="found_person").length,"Đã gặp"]]
-              : [[C.heroAccent,items.filter(i=>i.type==="lost").length,"Đang xác minh"],[C.teal,items.filter(i=>i.type==="found").length,"Chờ xác nhận"],[C.statText,"312","Đã kết nối thành công"]]
-            ).map(([color,n,l])=>(
-              <div key={l} style={{ maxWidth:96, textAlign:"center" }}><div style={{ fontSize:26, fontWeight:900, color, lineHeight:1 }}>{n}</div><div style={{ fontSize:10, color:C.statText, letterSpacing:1, textTransform:"uppercase", marginTop:3, lineHeight:1.4 }}>{l}</div></div>
+              ? [[urgentCount,"Khẩn cấp"],[missing.filter(m=>m.type==="missing").length,"Đang tìm"],[missing.filter(m=>m.type==="found_person").length,"Đã gặp"]]
+              : [[items.filter(i=>i.type==="lost").length,"Đang xác minh"],[items.filter(i=>i.type==="found").length,"Chờ xác nhận"],["312","Đã kết nối thành công"]]
+            ).map(([n,l])=>(
+              <div key={l} className="max-w-[100px] text-center"><div className="text-2xl sm:text-[26px] font-black text-white leading-none">{n}</div><div className="text-[10px] text-white/80 tracking-wide uppercase mt-1 leading-snug">{l}</div></div>
             ))}
           </div>
         </div>
@@ -1591,33 +1588,33 @@ export default function App() {
 
       {/* AI BANNER */}
       {mainTab==="missing" ? (
-        <div style={{ background:`linear-gradient(90deg,${C.rose}12,${C.roseDark}05)`, borderBottom:`1px solid ${C.rose}20`, padding:"10px 22px", display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
-          <span style={{ fontSize:13, color:"#FF9AB9" }}>🔎 <strong>AI Đối Chiếu Ảnh</strong> — Tải ảnh người lạc, AI so sánh với toàn bộ hồ sơ</span>
-          <button onClick={()=>setFaceSearch(true)} style={{ background:`${C.rose}25`, border:`1px solid ${C.rose}40`, borderRadius:8, padding:"5px 12px", color:C.rose, fontSize:12, fontWeight:700, cursor:"pointer" }}>Thử ngay →</button>
+        <div className="bg-warn-50 border-b border-warn-200 px-4 sm:px-5.5 sm:px-[22px] py-2.5 flex items-center justify-center gap-2.5 flex-wrap text-center">
+          <span className="text-[13px] text-warn-700">🔎 <strong>AI Đối Chiếu Ảnh</strong> — Tải ảnh người lạc, AI so sánh với toàn bộ hồ sơ</span>
+          <button onClick={()=>setFaceSearch(true)} className="bg-white border border-warn-300 rounded-lg px-3 py-1.5 text-warn-700 text-xs font-bold cursor-pointer">Thử ngay →</button>
         </div>
       ) : (
-        <div style={{ background:`linear-gradient(90deg,${C.violet}12,${C.violetDark}05)`, borderBottom:`1px solid ${C.violet}20`, padding:"10px 22px", textAlign:"center" }}>
-          <span style={{ fontSize:13, color:"#9D99FF" }}>🤖 <strong>AI Vision</strong> — Ứng dụng công nghệ AI hỗ trợ nhận diện và điền thông tin nhanh chóng, chính xác và bảo mật.</span>
+        <div className="bg-ai-50 border-b border-ai-200 px-4 sm:px-5.5 sm:px-[22px] py-2.5 text-center">
+          <span className="text-[13px] text-ai-700">🤖 <strong>AI Vision</strong> — Ứng dụng công nghệ AI hỗ trợ nhận diện và điền thông tin nhanh chóng, chính xác và bảo mật.</span>
         </div>
       )}
 
       {/* FILTERS */}
-      <div style={{ background:C.bg1, borderBottom:`1px solid ${C.border}`, padding:"10px 22px", overflowX:"auto" }}>
-        <div style={{ maxWidth:1040, margin:"0 auto", display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+      <div className="bg-white border-b border-slate-200 px-4 sm:px-5.5 sm:px-[22px] py-2.5 overflow-x-auto">
+        <div className="max-w-[1140px] mx-auto flex gap-2 items-center flex-nowrap sm:flex-wrap">
           {mainTab==="items" ? <>
-            <div style={{ display:"flex", gap:3, background:C.bg, borderRadius:10, padding:3 }}>
-              {[["all","Tất cả"],["lost","🔴 Đang tìm"],["found","🟢 Đã nhặt"]].map(([v,l])=>(
-                <button key={v} onClick={()=>setSubTab(v)} style={{ padding:"6px 12px", borderRadius:8, border:"none", background:subTab===v?(v==="lost"?C.accent:v==="found"?C.teal:"#333"):"transparent", color:subTab===v?"#fff":C.text3, fontWeight:700, fontSize:12, cursor:"pointer", whiteSpace:"nowrap" }}>{l}</button>
+            <div className="flex gap-1 bg-slate-100 rounded-lg p-1 shrink-0">
+              {[["all","Tất cả"],["lost","🔵 Đang tìm"],["found","🟢 Đã nhặt"]].map(([v,l])=>(
+                <button key={v} onClick={()=>setSubTab(v)} className={`px-3 py-1.5 rounded-md border-none font-bold text-xs cursor-pointer whitespace-nowrap transition ${subTab===v?(v==="lost"?"bg-brand-600 text-white":v==="found"?"bg-ok-500 text-white":"bg-slate-700 text-white"):"bg-transparent text-slate-500"}`}>{l}</button>
               ))}
             </div>
-            <div style={{ width:1, height:24, background:C.border }}/>
+            <div className="w-px h-6 bg-slate-200 shrink-0"/>
             {["Tất cả",...ITEM_CAT].map(c=>(
-              <button key={c} onClick={()=>setCat(c)} style={{ padding:"6px 12px", borderRadius:8, border:`1.5px solid ${cat===c?C.accent:C.border}`, background:cat===c?`${C.accent}12`:"transparent", color:cat===c?C.accent:C.text3, fontWeight:600, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>{c}</button>
+              <button key={c} onClick={()=>setCat(c)} className={`px-3 py-1.5 rounded-lg border font-semibold text-[11px] cursor-pointer whitespace-nowrap shrink-0 transition ${cat===c?"border-brand-500 bg-brand-50 text-brand-700":"border-slate-200 bg-transparent text-slate-500"}`}>{c}</button>
             ))}
           </> : (
-            <div style={{ display:"flex", gap:3, background:C.bg, borderRadius:10, padding:3 }}>
-              {[["all","Tất cả"],["missing","🔴 Đang tìm"],["found_person","🟢 Đã gặp"]].map(([v,l])=>(
-                <button key={v} onClick={()=>setMissingSubTab(v)} style={{ padding:"6px 12px", borderRadius:8, border:"none", background:missingSubTab===v?(v==="missing"?C.rose:v==="found_person"?C.teal:"#333"):"transparent", color:missingSubTab===v?"#fff":C.text3, fontWeight:700, fontSize:12, cursor:"pointer", whiteSpace:"nowrap" }}>{l}</button>
+            <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
+              {[["all","Tất cả"],["missing","🟠 Đang tìm"],["found_person","🟢 Đã gặp"]].map(([v,l])=>(
+                <button key={v} onClick={()=>setMissingSubTab(v)} className={`px-3 py-1.5 rounded-md border-none font-bold text-xs cursor-pointer whitespace-nowrap transition ${missingSubTab===v?(v==="missing"?"bg-warn-600 text-white":v==="found_person"?"bg-ok-500 text-white":"bg-slate-700 text-white"):"bg-transparent text-slate-500"}`}>{l}</button>
               ))}
             </div>
           )}
@@ -1626,58 +1623,58 @@ export default function App() {
 
       {/* URGENT BANNER */}
       {mainTab==="missing" && urgentCount>0 && (
-        <div style={{ background:`${C.rose}08`, borderBottom:`1px solid ${C.rose}18`, padding:"10px 22px" }}>
-          <div style={{ maxWidth:1040, margin:"0 auto", display:"flex", alignItems:"center", gap:10 }}>
-            <span style={{ animation:"blink 1s ease infinite", fontSize:18 }}>🚨</span>
-            <span style={{ fontSize:13, color:C.rose, fontWeight:600 }}>{urgentCount} trường hợp khẩn cấp cần sự giúp đỡ ngay</span>
-            <button onClick={()=>setFaceSearch(true)} style={{ marginLeft:"auto", background:`${C.rose}18`, border:`1px solid ${C.rose}35`, borderRadius:8, padding:"6px 13px", color:C.rose, fontSize:12, fontWeight:700, cursor:"pointer" }}>Tôi có thể giúp →</button>
+        <div className="bg-warn-50 border-b border-warn-200 px-4 sm:px-5.5 sm:px-[22px] py-2.5">
+          <div className="max-w-[1140px] mx-auto flex items-center gap-2.5 flex-wrap">
+            <span className="animate-blink text-lg">🚨</span>
+            <span className="text-[13px] text-warn-700 font-semibold">{urgentCount} trường hợp khẩn cấp cần sự giúp đỡ ngay</span>
+            <button onClick={()=>setFaceSearch(true)} className="sm:ml-auto bg-white border border-warn-300 rounded-lg px-3.5 py-1.5 text-warn-700 text-xs font-bold cursor-pointer">Tôi có thể giúp →</button>
           </div>
         </div>
       )}
 
       {/* CONTENT */}
-      <main style={{ maxWidth:1040, margin:"0 auto", padding:"24px 22px 60px" }}>
+      <main className="max-w-[1140px] mx-auto px-4 sm:px-5.5 sm:px-[22px] pt-6 pb-16">
         {mainTab==="items" ? <>
-          <div style={{ marginBottom:14, color:"#3A3A3A", fontSize:12 }}>Tìm thấy <strong style={{ color:"#aaa" }}>{filteredItems.length}</strong> kết quả</div>
+          <div className="mb-3.5 text-slate-400 text-xs">Tìm thấy <strong className="text-slate-600">{filteredItems.length}</strong> kết quả</div>
           {filteredItems.length===0 ? <Empty icon="🔍" text="Không tìm thấy kết quả phù hợp"/> :
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))", gap:14 }}>
+            <div className="grid gap-3.5" style={{ gridTemplateColumns:"repeat(auto-fill,minmax(250px,1fr))" }}>
               {filteredItems.map(item=><ItemCard key={item.id} item={item} onClick={()=>setDetailItem(item)}/>)}
             </div>}
         </> : <>
-          <div style={{ marginBottom:14, color:"#3A3A3A", fontSize:12 }}><strong style={{ color:"#aaa" }}>{filteredMissing.length}</strong> hồ sơ</div>
+          <div className="mb-3.5 text-slate-400 text-xs"><strong className="text-slate-600">{filteredMissing.length}</strong> hồ sơ</div>
           {filteredMissing.length===0 ? <Empty icon="👤" text="Không tìm thấy hồ sơ phù hợp"/> :
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))", gap:14 }}>
+            <div className="grid gap-3.5" style={{ gridTemplateColumns:"repeat(auto-fill,minmax(250px,1fr))" }}>
               {filteredMissing.map(p=><MissingCard key={p.id} person={p} onClick={()=>setDetailMissing(p)}/>)}
             </div>}
-          <div style={{ marginTop:32, background:`linear-gradient(135deg,${C.rose}0A,${C.roseDark}05)`, border:`1px solid ${C.rose}22`, borderRadius:16, padding:"22px 26px", display:"flex", alignItems:"center", gap:18, flexWrap:"wrap" }}>
-            <div style={{ flex:1, minWidth:200 }}><div style={{ fontWeight:800, fontSize:16, marginBottom:5 }}>Bạn gặp người có vẻ bị lạc?</div><div style={{ fontSize:13, color:C.text3, lineHeight:1.5 }}>Chụp ảnh và để AI tự động đối chiếu với hồ sơ người đang tìm kiếm.</div></div>
-            <button onClick={()=>setFaceSearch(true)} style={{ ...S.btn(`linear-gradient(135deg,${C.rose},${C.roseDark})`), width:"auto", padding:"13px 22px" }}>🔎 Đối chiếu ảnh ngay</button>
+          <div className="mt-8 bg-warn-50 border border-warn-200 rounded-2xl px-5 sm:px-6.5 sm:px-[26px] py-5.5 py-[22px] flex items-center gap-4.5 gap-[18px] flex-wrap">
+            <div className="flex-1 min-w-[200px]"><div className="font-extrabold text-base mb-1 text-slate-900">Bạn gặp người có vẻ bị lạc?</div><div className="text-[13px] text-slate-500 leading-relaxed">Chụp ảnh và để AI tự động đối chiếu với hồ sơ người đang tìm kiếm.</div></div>
+            <button onClick={()=>setFaceSearch(true)} className="bg-warn-600 hover:bg-warn-700 border-none rounded-xl px-5.5 px-[22px] py-3.5 text-white font-extrabold text-[15px] cursor-pointer transition">🔎 Đối chiếu ảnh ngay</button>
           </div>
         </>}
       </main>
 
       {/* FOOTER */}
-      <footer style={{ background:C.bg1, borderTop:`1px solid ${C.border}`, padding:"24px 22px" }}>
-        <div style={{ maxWidth:1040, margin:"0 auto" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:20, marginBottom:20 }}>
+      <footer className="bg-slate-900 text-slate-300 px-4 sm:px-5.5 sm:px-[22px] py-6">
+        <div className="max-w-[1140px] mx-auto">
+          <div className="flex justify-between items-start flex-wrap gap-5 mb-5">
             <div>
-              <div style={{ fontWeight:900, fontSize:18, marginBottom:6 }}>TìmĐồ<span style={{ color:C.accent }}>.vn</span></div>
-              <div style={{ fontSize:13, color:C.text3, maxWidth:280, lineHeight:1.6 }}>Hỗ trợ tìm kiếm và trao trả tài sản, người thân thất lạc nhanh chóng, tin cậy.</div>
+              <div className="font-black text-lg mb-1.5 text-white">TìmĐồ<span className="text-brand-400">.vn</span></div>
+              <div className="text-[13px] text-slate-400 max-w-[280px] leading-relaxed">Hỗ trợ tìm kiếm và trao trả tài sản, người thân thất lạc nhanh chóng, tin cậy.</div>
             </div>
-            <div style={{ display:"flex", gap:40, flexWrap:"wrap" }}>
+            <div className="flex gap-10 flex-wrap">
               {[["Tính năng",["🔍 Tìm đồ vật","👤 Tìm người thân","🤖 AI Nhận diện","🔎 Đối chiếu ảnh"]],["Hỗ trợ",["📞 Hotline: 1800 9999","📧 help@timdovn.vn","💬 Chat hỗ trợ"]]].map(([title,links])=>(
                 <div key={title}>
-                  <div style={{ fontWeight:700, fontSize:12, color:C.text2, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>{title}</div>
-                  {links.map(l=><div key={l} style={{ fontSize:13, color:C.text3, marginBottom:7, cursor:"pointer" }}>{l}</div>)}
+                  <div className="font-bold text-xs text-slate-300 uppercase tracking-wider mb-2.5">{title}</div>
+                  {links.map(l=><div key={l} className="text-[13px] text-slate-400 mb-1.5 cursor-pointer hover:text-slate-200">{l}</div>)}
                 </div>
               ))}
             </div>
           </div>
-          <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:16, display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
-            <div style={{ fontSize:12, color:"#333" }}>© 2026 TìmĐồ.vn · <span onClick={()=>setShowPrivacy(true)} style={{ textDecoration:"underline", cursor:"pointer" }}>Chính sách quyền riêng tư</span></div>
-            <div style={{ display:"flex", gap:8 }}>
+          <div className="border-t border-slate-700 pt-4 flex justify-between items-center flex-wrap gap-2.5">
+            <div className="text-xs text-slate-500">© 2026 TìmĐồ.vn · <span onClick={()=>setShowPrivacy(true)} className="underline cursor-pointer hover:text-slate-300">Chính sách quyền riêng tư</span></div>
+            <div className="flex gap-2 flex-wrap">
               {["🚨 Khẩn cấp 113","🏥 Cấp cứu 115","👮 Công an 114"].map(t=>(
-                <div key={t} style={{ background:"#1A1A1A", border:`1px solid ${C.border}`, borderRadius:8, padding:"5px 10px", fontSize:11, color:C.text3 }}>{t}</div>
+                <div key={t} className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-400">{t}</div>
               ))}
             </div>
           </div>
